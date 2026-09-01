@@ -268,7 +268,9 @@ Then double-click:
 
 - **`dist\TrimPlaylist\TrimPlaylist.exe`** — starts the server automatically and opens the app window
 - **`dist\TrimPlaylist\Run Trim Playlist.bat`** — same shortcut
-- **`dist\UrlTrimmer\UrlTrimmer.exe`** — download/trim from URLs (same as `cut_url.py`)
+- **`trim-url.bat`** — download/trim URLs (recommended; uses Python, same as `cut_url.py`)
+
+Optional: **`dist\UrlTrimmer\UrlTrimmer.exe`** — same trimmer without Python installed. **Windows Security may delete this file** (false positive). If it disappears, use **`trim-url.bat`** instead, or add an exclusion in Windows Security for `url-trimmer\dist\UrlTrimmer`.
 
 No need to run `python playlist_server.py` first. The server runs **inside** the `.exe`. Close the app window to stop the server and free the port.
 
