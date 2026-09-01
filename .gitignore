@@ -1,0 +1,12 @@
+setlist.json
+/output
+player-session.json
+
+playlists/**/files/
+
+# Cookie files (keep README only)
+cookies/*.txt
+!cookies/README.txt
+
+build/
+dist/

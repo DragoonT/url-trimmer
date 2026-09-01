@@ -1,0 +1,14 @@
+{
+  "url": "https://www.facebook.com/watch/?v=YOUR_VIDEO_ID",
+  "format": "mp4",
+  "quality": "720",
+  "volume": 2.0,
+  "cookies": "cookies.txt",
+  "tracks": [
+    {
+      "name": "Artist - Song Title",
+      "start": "5:00",
+      "end": "8:30"
+    }
+  ]
+}
