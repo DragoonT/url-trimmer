@@ -5,11 +5,11 @@ python -m pip install -r requirements.txt -r requirements-build.txt
 if ($LASTEXITCODE -ne 0) { exit 1 }
 
 Write-Host "`nBuilding TrimPlaylist.exe ..."
-python -m PyInstaller --noconfirm TrimPlaylist.spec
+python -m PyInstaller --clean --noconfirm TrimPlaylist.spec
 if ($LASTEXITCODE -ne 0) { exit 1 }
 
 Write-Host "`nBuilding UrlTrimmer.exe ..."
-python -m PyInstaller --noconfirm UrlTrimmer.spec
+python -m PyInstaller --clean --noconfirm UrlTrimmer.spec
 if ($LASTEXITCODE -ne 0) { exit 1 }
 
 Write-Host "`nDone."

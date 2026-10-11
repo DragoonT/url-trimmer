@@ -12,7 +12,7 @@
       <div class="brand card animate-fade-up">
         <div class="brand-icon bg-brand-gradient" data-icon="music"></div>
         <div>
-          <h1>Trim Playlist</h1>
+          <div class="app-switch"><button class="btn btn-ghost" id="appSwitch" aria-expanded="false" aria-haspopup="menu"><span id="appTitle">Trim Playlist</span><span data-icon="chevron-down"></span></button><div id="appMenu" class="app-menu" role="menu" hidden><button class="btn btn-ghost" data-view="playlist" role="menuitem">Trim Playlist</button><button class="btn btn-ghost" data-view="url" role="menuitem">Trim URL</button></div></div>
           <p class="muted">Your playlists</p>
         </div>
       </div>
@@ -139,5 +139,6 @@
   <div id="toastHost" class="toast-host"></div>
   <audio id="audio"></audio>
   <script type="module" src="app.js"></script>
+<script type="module" src="downloads.js"></script>
 </body>
 </html>

@@ -18,6 +18,8 @@ from pathlib import Path
 from urllib.parse import parse_qs, unquote, urlparse
 
 from app_paths import app_dir, resource_dir, run_hidden
+from download_jobs import start_download, get_job
+import account_connections
 
 QUALITY_HEIGHTS = (1080, 720, 480, 360)
 
@@ -219,6 +221,14 @@ def save_player_session(data: dict) -> dict:
 
 
 class PlaylistHandler(SimpleHTTPRequestHandler):
+    def account_request_allowed(self):
+        host = urlparse('http://' + self.headers.get('Host', '')).hostname
+        return self.client_address[0] in ('127.0.0.1', '::1') and host in ('127.0.0.1', 'localhost', '::1')
+
+    def account_app_request_allowed(self):
+        origin = self.headers.get('Origin')
+        return self.account_request_allowed() and self.headers.get('X-Trim-Playlist') == '1' and (not origin or origin == 'http://' + self.headers.get('Host', ''))
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, directory=str(PLAYER_DIR), **kwargs)
 
@@ -237,6 +247,25 @@ class PlaylistHandler(SimpleHTTPRequestHandler):
         parsed = urlparse(self.path)
         path = parsed.path.rstrip("/") or "/"
 
+        if path == '/api/accounts' or path.startswith('/api/accounts/pair/'):
+            if not self.account_request_allowed():
+                self.send_json({'error': 'Account connection is local only'}, 403)
+                return
+            try:
+                data = account_connections.pairing(path.rsplit('/', 1)[-1]) if '/pair/' in path else account_connections.list_accounts()
+                self.send_json(data)
+            except ValueError as exc:
+                self.send_json({'error': str(exc)}, 400)
+            return
+
+        if path == "/api/cookies":
+            folder = SCRIPT_DIR / "cookies"
+            names = sorted(p.name for p in folder.glob("*.txt") if p.is_file() and p.name.lower() != "readme.txt")
+            self.send_json(names)
+            return
+        if path.startswith("/api/downloads/"):
+            self.send_json(get_job(path.split("/")[-1]))
+            return
         if path == "/api/playlists":
             self.send_json(list_playlists())
             return
@@ -264,6 +293,33 @@ class PlaylistHandler(SimpleHTTPRequestHandler):
         parsed = urlparse(self.path)
         path = parsed.path.rstrip("/")
 
+        if path == '/api/accounts/connect' or path.startswith('/api/accounts/pair/'):
+            if not self.account_request_allowed() or (path == '/api/accounts/connect' and not self.account_app_request_allowed()):
+                self.send_json({'error': 'Account connection request denied'}, 403)
+                return
+            try:
+                length = int(self.headers.get('Content-Length', '0'))
+                if length < 0 or length > 1024 * 1024:
+                    raise ValueError('Account request too large')
+                data = self.read_json()
+                if not isinstance(data, dict):
+                    raise ValueError('Account request must be a JSON object')
+                if path == '/api/accounts/connect':
+                    result = {'token': account_connections.begin(data.get('platform'))}
+                else:
+                    result = account_connections.receive(path.rsplit('/', 1)[-1], data.get('cookies'), data.get('verified'))
+                self.send_json(result)
+            except (ValueError, TypeError) as exc:
+                self.send_json({'error': str(exc)}, 400)
+            return
+
+        if path == "/api/downloads":
+            try:
+                job_id = start_download(self.read_json())
+                self.send_json({"id": job_id}, 202)
+            except (ValueError, TypeError) as exc:
+                self.send_json({"error": str(exc)}, 400)
+            return
         if path == "/api/playlists":
             data = self.read_json()
             playlist = create_playlist(str(data.get("name", "New playlist")))
@@ -317,6 +373,16 @@ class PlaylistHandler(SimpleHTTPRequestHandler):
     def do_DELETE(self) -> None:
         parsed = urlparse(self.path)
         parts = parsed.path.strip("/").split("/")
+        if len(parts) == 3 and parts[:2] == ['api', 'accounts']:
+            if not self.account_app_request_allowed():
+                self.send_json({'error': 'Account connection request denied'}, 403)
+                return
+            try:
+                account_connections.disconnect(parts[2])
+                self.send_json({'ok': True})
+            except ValueError as exc:
+                self.send_json({'error': str(exc)}, 400)
+            return
         if len(parts) == 3 and parts[0] == "api" and parts[1] == "playlists":
             if delete_playlist(parts[2]):
                 self.send_json({"ok": True})

@@ -1174,3 +1174,46 @@ body {
 
   .player-stage { min-height: 55vh; }
 }
+
+/* Workspace switcher and URL download view */
+.app-switch { position:relative; }
+#appSwitch { padding:4px 0; font-size:1.1rem; text-align:left; }
+.app-menu { position:absolute; top:100%; left:0; min-width:170px; padding:6px; background:var(--card); border:1px solid var(--border); border-radius:12px; z-index:100; box-shadow:var(--shadow-md); }
+.app-menu button { display:flex; width:100%; justify-content:flex-start; }
+.app-menu[hidden], .download-view[hidden] { display:none!important; }
+.download-view { grid-column:2 / -1; grid-row:1; overflow:auto; padding:28px; }
+.download-form { max-width:760px; margin:auto; }
+.app.url-view > .library, .app.url-view > .player-stage, .app.url-view > main { display:none!important; }
+.app.url-view .sidebar > .panel { display:none; }
+@media(max-width:800px){ .download-view { grid-column:1 / -1; grid-row:2; padding:16px; } }
+
+.download-select { width:100%; }
+.download-select .dropdown-trigger { width:100%; justify-content:space-between; text-align:left; cursor:pointer; }
+.download-select .dropdown-menu { left:0; right:0; max-height:240px; overflow:auto; }
+.custom-check { appearance:none; width:18px; height:18px; border:1px solid var(--border); border-radius:5px; background:var(--card); vertical-align:middle; cursor:pointer; margin-right:8px; }
+.custom-check:checked { background:var(--brand); border-color:var(--brand); }
+.custom-check:checked::after { content:""; display:block; width:5px; height:9px; border:solid white; border-width:0 2px 2px 0; transform:translate(5px,1px) rotate(45deg); }
+.custom-check:focus-visible { outline:2px solid var(--brand); outline-offset:3px; }
+.download-progress { height:6px; background:var(--muted); border-radius:99px; overflow:hidden; margin-top:20px; }
+.download-progress > div { width:0%; height:100%; transition:width .2s; }
+
+.download-select .dropdown-trigger { display:flex; flex-direction:row; align-items:center; gap:12px; }
+.download-select .dropdown-trigger > span { flex:1; min-width:0; }
+.download-select .dropdown-trigger > svg { flex:none; width:18px; height:18px; margin-left:auto; }
+
+/* Form layout must not override conditional visibility. */
+.download-view [hidden] { display:none!important; }
+.download-select .dropdown-trigger:disabled { cursor:default; opacity:.7; }
+.download-select .dropdown-trigger:disabled > svg { display:none; }
+
+/* Keep volume numeric without native spinner buttons. */
+.download-form input[name="volume"] { appearance:textfield; -moz-appearance:textfield; }
+.download-form input[name="volume"]::-webkit-inner-spin-button,
+.download-form input[name="volume"]::-webkit-outer-spin-button { -webkit-appearance:none; margin:0; }
+
+#platformLogin a.dropdown-item { text-decoration:none; }
+#platformLogin [data-login-chevron] { flex:0 0 auto; }
+
+.connection-page { max-width:640px; margin:40px auto; padding:24px; height:auto; }
+.account-list { display:grid; gap:6px; margin-top:8px; }
+.account-row { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:8px; border:1px solid var(--border); border-radius:8px; font-size:.82rem; }

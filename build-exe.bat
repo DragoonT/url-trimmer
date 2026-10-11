@@ -8,7 +8,7 @@ if errorlevel 1 goto failed
 
 echo.
 echo Building TrimPlaylist.exe ...
-python -m PyInstaller --noconfirm TrimPlaylist.spec
+python -m PyInstaller --clean --noconfirm TrimPlaylist.spec
 if errorlevel 1 goto failed
 
 > "dist\TrimPlaylist\Run Trim Playlist.bat" echo @echo off
@@ -17,7 +17,7 @@ if errorlevel 1 goto failed
 
 echo.
 echo Building UrlTrimmer.exe (optional — Windows may block/delete this file) ...
-python -m PyInstaller --noconfirm UrlTrimmer.spec
+python -m PyInstaller --clean --noconfirm UrlTrimmer.spec
 if errorlevel 1 goto failed
 
 > "dist\UrlTrimmer\Run Url Trimmer.bat" echo @echo off

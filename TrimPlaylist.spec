@@ -1,9 +1,11 @@
 # -*- mode: python ; coding: utf-8 -*-
 from pathlib import Path
 
-from PyInstaller.utils.hooks import collect_data_files
+from PyInstaller.utils.hooks import collect_data_files, collect_submodules
 
 ROOT = Path(SPECPATH)
+import runpy
+runpy.run_path(str(ROOT / "package_extension.py"))["package_extension"](ROOT)
 
 datas = [(str(ROOT / "player"), "player")]
 datas += collect_data_files("imageio_ffmpeg")
@@ -13,7 +15,7 @@ a = Analysis(
     pathex=[str(ROOT)],
     binaries=[],
     datas=datas,
-    hiddenimports=["imageio_ffmpeg", "webview", "clr"],
+    hiddenimports=["imageio_ffmpeg", "webview", "clr"] + collect_submodules("yt_dlp"),
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
@@ -30,6 +32,7 @@ exe = EXE(
     [],
     exclude_binaries=True,
     name="TrimPlaylist",
+    icon=str(ROOT / "denia.jpg"),
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,

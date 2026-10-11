@@ -216,7 +216,7 @@ MP4 files are re-encoded to **H.264 + AAC** (`yuv420p`) so they work in CapCut a
 **Download failed**
 
 ```powershell
-pip install -U yt-dlp
+python -m pip install --upgrade --pre "yt-dlp[default]"
 ```
 
 **Facebook / private videos** — add cookies in `cookies/` folder.
@@ -279,3 +279,15 @@ If port `8765` is already in use (browser or another `.exe` open), the next free
 **Data folders** (`playlists/`, `player-session.json`, `output/`, `cookies/`) live in the **`url-trimmer` project folder** — the same place the browser app uses. The `.exe` finds that folder automatically when it sits in `dist/TrimPlaylist/`.
 
 You can copy the whole `dist/TrimPlaylist` or `dist/UrlTrimmer` folder to another PC — no Python install required. On another PC, data is stored next to the `.exe` unless you set `TRIM_PLAYLIST_DIR` to a custom folder.
+
+## Download inside Trim Playlist
+
+Click the **Trim Playlist** title at the top left and select **Trim URL**. Choose **Trim Playlist** in the same menu to return to your player. Choose **Single video** or **Entire playlist**, then enter its URL. Single videos support Full download or Trim; entire playlists always use Full mode and each video’s original title. Trim accepts an optional filename and requires start/end times. MP4 offers video resolution choices; MP3 offers Best quality (VBR) or 64–320 kbps audio bitrate choices. Encoding at a higher bitrate cannot restore quality missing from the source. Optional cookies are read from cookies/. Completed files save in output/ and can be picked for your local playlist.
+
+Use **Sign in to platform** with the local **Account Connector** extension to connect the browser session and close the sign-in tabs automatically. See [extension setup](browser-extension/README.md). The desktop app opens your default browser, including Helium. Saved sessions and cookie files stay in this project. Manual cookie-file selection is also available.
+
+### YouTube authenticated downloads
+
+The downloader dependency includes the October 10, 2026 fix for YouTube's authenticated playback error, “The page needs to be reloaded.” Rebuild the desktop app after updating dependencies; updating Python packages does not update an existing executable. A saved session can access only playlists and videos that the same account is permitted to view.
+
+The connector ZIP can be downloaded from the connection page. Store-style installation requires a published browser-store listing; this project does not currently have one. The downloadable ZIP uses the browser's Load unpacked workflow.

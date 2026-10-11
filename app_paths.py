@@ -99,11 +99,12 @@ def install_hidden_subprocess() -> None:
     def run(*args, **kwargs):
         return original_run(*args, **apply_hidden(kwargs))
 
-    def popen(*args, **kwargs):
-        return original_popen(*args, **apply_hidden(kwargs))
+    class HiddenPopen(original_popen):
+        def __init__(self, *args, **kwargs):
+            super().__init__(*args, **apply_hidden(kwargs))
 
     subprocess.run = run  # type: ignore[assignment]
-    subprocess.Popen = popen  # type: ignore[assignment]
+    subprocess.Popen = HiddenPopen  # type: ignore[assignment]
 
 
 install_hidden_subprocess()

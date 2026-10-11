@@ -30,6 +30,7 @@ exe = EXE(
     [],
     exclude_binaries=True,
     name="UrlTrimmer",
+    icon=str(ROOT / "denia.jpg"),
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
