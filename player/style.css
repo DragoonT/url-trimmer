@@ -1217,3 +1217,25 @@ body {
 .connection-page { max-width:640px; margin:40px auto; padding:24px; height:auto; }
 .account-list { display:grid; gap:6px; margin-top:8px; }
 .account-row { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:8px; border:1px solid var(--border); border-radius:8px; font-size:.82rem; }
+
+.playlist-picker{margin:16px 0;padding:16px;border:1px solid var(--border,#293341);border-radius:14px}.playlist-picker-list{max-height:300px;overflow:auto;display:grid;gap:6px}.playlist-choice{display:flex;gap:12px;align-items:center;width:100%;padding:12px;text-align:left;color:inherit;background:transparent;border:1px solid #293341;border-radius:10px;cursor:pointer}.playlist-choice:disabled{opacity:.5;cursor:default}.choice-check{width:20px;height:20px;flex:none;border:1px solid #526077;border-radius:5px;display:grid;place-items:center}.choice-check svg{width:16px;height:16px;visibility:hidden}.playlist-choice[aria-checked="true"] .choice-check{background:#3276ff;border-color:#3276ff}.playlist-choice[aria-checked="true"] .choice-check svg{visibility:visible}.playlist-choice:focus-visible{outline:2px solid #3276ff;outline-offset:2px}
+
+/* Disclosure buttons preserve track nodes while the list stays height-bounded. */
+.library{overflow-y:auto}
+.collapsible{flex-shrink:0;min-width:0}
+.panel-toggle{display:flex;align-items:center;justify-content:space-between;gap:12px;width:100%;padding:0;background:transparent;color:inherit;border:0;text-align:left;cursor:pointer;border-radius:6px;flex-shrink:0}
+.panel-toggle .section-title{margin:0;font-size:.92rem}
+.panel-toggle:focus-visible{outline:2px solid var(--primary,#3276ff);outline-offset:5px}
+.panel-chevron{display:flex;flex:none}
+.collapsed .panel-chevron{transform:rotate(-90deg)}
+.panel-content{margin-top:12px;min-width:0}
+.panel-content[hidden]{display:none!important}
+.tracks-panel{display:flex;flex:1 1 0;min-height:140px;overflow:hidden}
+.tracks-panel.collapsed{flex:0 0 auto;min-height:0}
+.tracks-content{display:flex;flex-direction:column;min-height:0;flex:1 1 0;gap:8px;overflow:hidden}
+.tracks-content>.drag-hint{align-self:flex-end;flex-shrink:0}
+.tracks-content>.track-list{min-height:0;min-width:0;flex:1 1 0;overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain}
+.track-item{grid-template-columns:22px 28px minmax(0,1fr) auto;min-width:0}
+.track-main{min-width:0;overflow:hidden}
+.track-name{overflow-wrap:anywhere}
+@media(max-width:1100px){.tracks-panel:not(.collapsed){flex:none;height:360px;max-height:50vh}}

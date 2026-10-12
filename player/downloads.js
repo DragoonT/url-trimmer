@@ -12,10 +12,11 @@ panel.innerHTML=`<form class="card download-form">
 <p class="muted" id="downloadPlaylist" hidden>Playlist downloads always use Full mode and each video’s original title.</p>
 <label class="field" id="downloadAudioQuality" hidden>MP3 quality<select class="input" name="audio_quality"><option value="best">Best quality (VBR)</option><option value="320">320 kbps</option><option value="256">256 kbps</option><option value="192">192 kbps</option><option value="128">128 kbps</option><option value="96">96 kbps</option><option value="64">64 kbps</option></select></label>
 <div id="downloadTrim" hidden><label class="field">Filename (optional)<input class="input" name="name" placeholder="Use original title"></label><label class="field">Start<input class="input" name="start" placeholder="0:00"></label><label class="field">End<input class="input" name="end" placeholder="3:30"></label></div>
-<div class="field"><span class="field-label">Platform account</span><div class="dropdown download-select" id="platformLogin"><button type="button" class="input dropdown-trigger" aria-haspopup="menu" aria-expanded="false"><span>Sign in to platform</span><span data-login-chevron></span></button><div class="dropdown-menu" role="menu"></div></div><span class="muted">Connect through the Account Connector extension in your browser. Sessions save locally; use Disconnect to remove a saved session.</span></div>
-<label class="field">Cookies<input type="hidden" name="cookies" value=""><div id="cookieSelect"></div></label><label class="field">Volume multiplier<input class="input" name="volume" type="number" min="0" max="10" step="0.1" value="1"><span class="muted">1 = original volume · 2 = boost</span></label>
+<label class="field">Authentication<select class="input" name="auth_source"><option value="cookie">Cookie file</option><option value="platform">Platform account</option><option value="none">No authentication</option></select></label>
+<div id="authPlatform" hidden><label class="field">Platform<select class="input" name="platform"><option value="youtube">YouTube</option><option value="facebook">Facebook</option><option value="instagram">Instagram</option><option value="x">X / Twitter</option><option value="tiktok">TikTok</option><option value="twitch">Twitch</option></select></label><div id="accountList" class="account-list"></div><a id="connectPlatform" class="btn btn-outline" target="_blank" rel="noopener noreferrer">Connect selected platform</a><p class="muted">The optional connector saves a browser session. Use a cookie file if the connector is not installed.</p></div>
+<label class="field" id="authCookie">Cookies<input type="hidden" name="cookies" value=""><div id="cookieSelect"></div></label><label class="field">Volume multiplier<input class="input" name="volume" type="number" min="0" max="10" step="0.1" value="1"><span class="muted">1 = original volume · 2 = boost</span></label>
 <p class="muted">Full downloads use each video's original title. Files save in output/; add them to your playlist using the file picker.</p>
-<button class="btn btn-primary" type="submit">Start download</button><div class="download-progress" role="progressbar" aria-valuemin="0" aria-valuemax="100"><div class="bg-brand-gradient"></div></div><p id="downloadStatus" role="status"></p>
+<section id="playlistPicker" class="playlist-picker" hidden aria-label="Choose playlist items"></section><button class="btn btn-primary" type="submit">Start download</button><div class="download-progress" role="progressbar" aria-valuemin="0" aria-valuemax="100"><div class="bg-brand-gradient"></div></div><p id="downloadStatus" role="status"></p>
 </form>`;
 document.querySelector('.app').append(panel);
 const form=panel.querySelector('form'),status=panel.querySelector('#downloadStatus');
@@ -76,13 +77,45 @@ function updateFormat(){const audio=form.elements.format.value==='mp3';panel.que
 form.elements.format.onchange=updateFormat;
 updateDownloadType();
 updateFormat();
-form.onsubmit=async e=>{e.preventDefault();const button=form.querySelector('[type=submit]');button.disabled=true;
-try {const data=Object.fromEntries(new FormData(form));data.playlist=form.elements.source_kind.value==='playlist';if(data.playlist)data.mode='full';
-const response=await fetch('/api/downloads',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});const result=await response.json();if(!response.ok)throw Error(result.error);
-let job;do{await new Promise(r=>setTimeout(r,750));job=await (await fetch('/api/downloads/'+result.id)).json();panel.querySelector('.download-progress div').style.width=(job.percent||0)+'%';panel.querySelector('.download-progress').setAttribute('aria-valuenow',job.percent||0);status.textContent=job.message+(job.percent!=null?' · '+Number(job.percent).toFixed(1)+'%':'')+(job.files?.length?' · '+job.files.length+' files saved':'');}while(job.status==='running');
-if(job.status==='error')throw Error(job.message);showToast('Download complete','success');
-}catch(err){status.textContent=err.message;showToast(err.message,'error');}finally{button.disabled=false;}};
-
+const picker=panel.querySelector('#playlistPicker');
+let preview=null,busy=false;
+function clearPreview(){form.querySelector('[type=submit]').disabled=busy;preview=null;picker.hidden=true;picker.replaceChildren();form.querySelector('[type=submit]').textContent='Start download';}
+function requestData(){const data=Object.fromEntries(new FormData(form));data.playlist=data.source_kind==='playlist';if(data.playlist)data.mode='full';if(data.auth_source!=='cookie')data.cookies='';return data;}
+form.addEventListener('input',clearPreview);form.addEventListener('change',clearPreview);
+async function waitJob(id,progress){let job;do{await new Promise(r=>setTimeout(r,500));const r=await fetch('/api/downloads/'+id,{cache:'no-store'});if(!r.ok)throw Error('Could not read download progress');job=await r.json();progress(job);}while(job.status==='running');if(job.status==='error')throw Error(job.message);return job;}
+function showPicker(result,data){
+ preview={data,key:JSON.stringify(requestData()),selected:new Set()};picker.hidden=false;picker.replaceChildren();
+ const heading=document.createElement('h3');heading.textContent=result.title;picker.append(heading);
+ const hint=document.createElement('p');hint.className='muted';hint.textContent=data.mode==='trim'?'Choose one video to trim.':'Choose one or more videos to download. Nothing has been downloaded yet.';picker.append(hint);
+ const count=document.createElement('p');count.className='muted';picker.append(count);
+ const list=document.createElement('div');list.className='playlist-picker-list';picker.append(list);
+ const submit=form.querySelector('[type=submit]');
+ const sync=()=>{count.textContent=preview.selected.size+' selected · '+result.items.length+' items';submit.textContent='Download selected';submit.disabled=busy||!preview.selected.size;};
+ for(const item of result.items){
+  const row=document.createElement('button');row.type='button';row.className='playlist-choice';row.setAttribute('role','checkbox');row.setAttribute('aria-checked','false');row.disabled=!item.available;
+  const check=document.createElement('span');check.className='choice-check';check.innerHTML=icon('check');
+  const label=document.createElement('span');label.textContent=item.index+'. '+item.title+(item.available?'':' · Unavailable');row.append(check,label);list.append(row);
+  row.onclick=()=>{if(data.mode==='trim'){preview.selected.clear();list.querySelectorAll('[aria-checked]').forEach(b=>b.setAttribute('aria-checked','false'));}else if(preview.selected.has(item.index)){preview.selected.delete(item.index);row.setAttribute('aria-checked','false');sync();return;}preview.selected.add(item.index);row.setAttribute('aria-checked','true');sync();};
+ }
+ const cancel=document.createElement('button');cancel.type='button';cancel.className='btn btn-ghost';cancel.textContent='Cancel selection';cancel.onclick=()=>{clearPreview();submit.disabled=false;status.textContent='Selection cancelled';};picker.append(cancel);sync();picker.scrollIntoView({behavior:'smooth',block:'nearest'});
+}
+form.onsubmit=async e=>{e.preventDefault();const button=form.querySelector('[type=submit]');if(busy)return;busy=true;button.disabled=true;let selecting=false;
+ try{
+  let data=requestData();
+  if(!data.playlist&&!preview){
+   status.textContent='Checking URL and loading playlist items…';
+   const r=await fetch('/api/downloads/preview',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});const response=await r.json();if(!r.ok)throw Error(response.error);
+   const result=await waitJob(response.id,job=>status.textContent=job.message);
+   if(JSON.stringify(data)!==JSON.stringify(requestData())){status.textContent='Settings changed. Click Start download again.';return;}
+   if(result.is_playlist){showPicker(result,data);selecting=true;return;}
+  }
+  if(preview){if(preview.key!==JSON.stringify(requestData()))throw Error('Settings changed. Load the playlist again.');data={...preview.data,selected_items:[...preview.selected]};if(!data.selected_items.length)throw Error('Choose at least one video');}
+  const r=await fetch('/api/downloads',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});const response=await r.json();if(!r.ok)throw Error(response.error);
+  await waitJob(response.id,job=>{panel.querySelector('.download-progress div').style.width=(job.percent||0)+'%';panel.querySelector('.download-progress').setAttribute('aria-valuenow',job.percent||0);status.textContent=job.message+(job.percent!=null?' · '+Number(job.percent).toFixed(1)+'%':'')+(job.files?.length?' · '+job.files.length+' files saved':'');});
+  clearPreview();showToast('Download complete','success');
+ }catch(error){status.textContent=error.message;showToast(error.message,'error');}
+ finally{busy=false;button.disabled=selecting?!preview?.selected.size:false;}
+};
 
 // Persist the downloader separately from playback fields in the shared session.
 let draftTimer, draftTouched=false, draftReady=false;
@@ -118,7 +151,7 @@ document.addEventListener('visibilitychange',()=>{if(document.visibilityState===
     input.value=value;
     select?.syncLabel();
    }
-   updateDownloadType();updateFormat();
+   updateDownloadType();updateFormat();updateAuthentication();
    await refreshCookies();cookies.syncLabel();
   }
  }catch(error){showToast(error.message,'error');}
@@ -126,47 +159,29 @@ document.addEventListener('visibilitychange',()=>{if(document.visibilityState===
 })();
 
 
-// Native target=_blank links use the system browser in the desktop runtime.
-const loginRoot=panel.querySelector('#platformLogin');
-const loginTrigger=loginRoot.querySelector('button');
-const loginMenu=loginRoot.querySelector('.dropdown-menu');
-loginRoot.querySelector('[data-login-chevron]').innerHTML=icon('chevron-down');
-const platforms=[
- ['YouTube','https://www.youtube.com/'],
- ['Facebook','https://www.facebook.com/login/'],
- ['Instagram','https://www.instagram.com/accounts/login/'],
- ['X / Twitter','https://x.com/i/flow/login'],
- ['TikTok','https://www.tiktok.com/login'],
- ['Twitch','https://www.twitch.tv/login'],
-];
-for(const [name,url] of platforms){
- const link=document.createElement('a');link.className='dropdown-item';link.textContent=name;
- const keys={'YouTube':'youtube','Facebook':'facebook','Instagram':'instagram','X / Twitter':'x','TikTok':'tiktok','Twitch':'twitch'};
- link.href='/connect.html?platform='+keys[name];link.target='_blank';link.rel='noopener noreferrer';link.dataset.value=name;link.setAttribute('role','menuitem');loginMenu.append(link);
+// Only the chosen authentication method and platform are displayed.
+const accountList=panel.querySelector('#accountList'),connectLink=panel.querySelector('#connectPlatform');
+let accountPolling=false,connectingPlatform=null;const accountVersions=new Map();
+function updateAuthentication(){
+ const platform=form.elements.auth_source.value==='platform';
+ panel.querySelector('#authPlatform').hidden=!platform;panel.querySelector('#authCookie').hidden=form.elements.auth_source.value!=='cookie';
+ connectLink.href='/connect.html?platform='+encodeURIComponent(form.elements.platform.value);
+ if(platform)refreshAccounts();
 }
-initDropdown({root:loginRoot,trigger:loginTrigger,menu:loginMenu});
-
-const accountList=document.createElement('div');accountList.className='account-list';loginRoot.after(accountList);
-const accountNote=document.createElement('span');accountNote.className='muted';accountNote.textContent='Signed-in status reflects the saved session checked during connection. A session can expire or be revoked by the platform.';accountList.after(accountNote);
-let connectingPlatform=null,accountPolling=false;const accountVersions=new Map();
-loginMenu.addEventListener('click',event=>{const link=event.target.closest('a');if(link){const platform=new URL(link.href).searchParams.get('platform');connectingPlatform={platform,previous:accountVersions.get(platform)||0};}});
+form.elements.auth_source.onchange=updateAuthentication;
+form.elements.platform.onchange=()=>{accountList.replaceChildren();updateAuthentication();};
+connectLink.onclick=()=>{connectingPlatform={platform:form.elements.platform.value,previous:accountVersions.get(form.elements.platform.value)||0};};
 async function refreshAccounts(){
- if(accountPolling)return;accountPolling=true;
+ if(accountPolling||form.elements.auth_source.value!=='platform')return;accountPolling=true;
  try{
-  const response=await fetch('/api/accounts',{cache:'no-store'});if(!response.ok)throw Error('Could not load account connections');
-  const accounts=await response.json();accountList.replaceChildren();
-  for(const account of accounts){
-   const row=document.createElement('div');row.className='account-row';
-   const text=document.createElement('span');text.textContent=account.name+' · '+(account.connected?'Signed in (saved session)':'Not connected');row.append(text);
-   if(account.connected){
-    const button=document.createElement('button');button.type='button';button.className='btn btn-ghost';button.textContent='Disconnect';
-    button.onclick=async()=>{button.disabled=true;try{const r=await fetch('/api/accounts/'+account.platform,{method:'DELETE',headers:{'X-Trim-Playlist':'1'}});if(!r.ok)throw Error('Could not disconnect');if(form.elements.cookies.value===account.filename){form.elements.cookies.value='';saveDownloadDraft();}await refreshCookies();accountPolling=false;await refreshAccounts();}catch(e){showToast(e.message,'error');button.disabled=false;}};row.append(button);
-    if(connectingPlatform?.platform===account.platform&&account.updatedAt!==connectingPlatform.previous){await refreshCookies();form.elements.cookies.value=account.filename;cookies.syncLabel();saveDownloadDraft();connectingPlatform=null;showToast(account.name+' session connected','success');}
-   }
-   accountVersions.set(account.platform,account.updatedAt);accountList.append(row);
-  }
- }catch(error){if(!accountList.children.length)accountList.textContent=error.message;}
- finally{accountPolling=false;}
+  const r=await fetch('/api/accounts',{cache:'no-store'});if(!r.ok)throw Error('Could not load account connection');
+  const accounts=await r.json();const account=accounts.find(a=>a.platform===form.elements.platform.value);accountList.replaceChildren();if(!account)return;
+  const row=document.createElement('div');row.className='account-row';const text=document.createElement('span');text.textContent=account.name+' · '+(account.connected?'Signed in (saved session)':'Not connected');row.append(text);
+  if(account.connected){const button=document.createElement('button');button.type='button';button.className='btn btn-ghost';button.textContent='Disconnect';button.onclick=async()=>{button.disabled=true;try{const r=await fetch('/api/accounts/'+account.platform,{method:'DELETE',headers:{'X-Trim-Playlist':'1'}});if(!r.ok)throw Error('Could not disconnect');accountPolling=false;await refreshAccounts();}catch(error){showToast(error.message,'error');button.disabled=false;}};row.append(button);}
+  accountList.append(row);
+  if(account.connected&&connectingPlatform?.platform===account.platform&&account.updatedAt!==connectingPlatform.previous){connectingPlatform=null;showToast(account.name+' session connected','success');}
+  accountVersions.set(account.platform,account.updatedAt);
+ }catch(error){accountList.textContent=error.message;}finally{accountPolling=false;}
 }
-refreshAccounts();
+updateAuthentication();
 setInterval(()=>{if(app.classList.contains('url-view')&&document.visibilityState==='visible')refreshAccounts();},2500);

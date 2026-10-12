@@ -18,7 +18,7 @@ from pathlib import Path
 from urllib.parse import parse_qs, unquote, urlparse
 
 from app_paths import app_dir, resource_dir, run_hidden
-from download_jobs import start_download, get_job
+from download_jobs import start_download, get_job, preview_download
 import account_connections
 
 QUALITY_HEIGHTS = (1080, 720, 480, 360)
@@ -309,6 +309,13 @@ class PlaylistHandler(SimpleHTTPRequestHandler):
                 else:
                     result = account_connections.receive(path.rsplit('/', 1)[-1], data.get('cookies'), data.get('verified'))
                 self.send_json(result)
+            except (ValueError, TypeError) as exc:
+                self.send_json({'error': str(exc)}, 400)
+            return
+
+        if path == "/api/downloads/preview":
+            try:
+                self.send_json({'id': preview_download(self.read_json())}, 202)
             except (ValueError, TypeError) as exc:
                 self.send_json({'error': str(exc)}, 400)
             return

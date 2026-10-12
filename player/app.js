@@ -4,6 +4,7 @@ import {
   openConfirm,
   initFileUpload,
   initDropdown,
+  initCollapsiblePanels,
 } from "./ui.js";
 import { initSortableList } from "./dnd.js";
 import { icon, setIcon, mountIcons } from "./icons.js";
@@ -901,6 +902,7 @@ els.addTrackBtn.addEventListener("click", async () => {
 
 allMediaElements().forEach(bindMediaEvents);
 bindSessionPersistence();
+initCollapsiblePanels(document);
 mountIcons(document);
 setIcon(els.shuffleBtn, "shuffle");
 setIcon(els.prevBtn, "skip-back");

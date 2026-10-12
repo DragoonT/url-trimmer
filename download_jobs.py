@@ -10,6 +10,63 @@ from app_paths import app_dir, run_hidden, hidden_subprocess_kwargs
 jobs = {}
 lock = threading.Lock()
 
+def download_cookie_path(data):
+    if data.get('auth_source', 'cookie') not in ('cookie', 'platform', 'none'):
+        raise ValueError('Choose a valid authentication method')
+    if data.get('auth_source', 'cookie') == 'none':
+        return None
+    if data.get('auth_source') == 'platform':
+        import account_connections
+        platform = data.get('platform')
+        path = account_connections.cookie_path(platform)
+        if not any(a['platform'] == platform and a['connected'] for a in account_connections.list_accounts()):
+            raise ValueError('Connect the selected platform account first')
+        return path
+    cookie = str(data.get('cookies', '')).strip()
+    if not cookie:
+        return None
+    if Path(cookie).name != cookie or '/' in cookie or '\\' in cookie or not cookie.lower().endswith('.txt') or cookie.lower() == 'readme.txt':
+        raise ValueError('Choose a cookie filename from cookies/')
+    path = app_dir() / 'cookies' / cookie
+    if not path.is_file():
+        raise ValueError('Cookies file not found in cookies/')
+    return path
+
+
+def preview_download(data):
+    url = str(data.get('url', '')).strip()
+    if urlparse(url).scheme not in ('http', 'https'):
+        raise ValueError('Enter a valid video or playlist URL')
+    cookie = download_cookie_path(data)
+    job_id = uuid.uuid4().hex
+    with lock:
+        jobs[job_id] = {'status': 'running', 'message': 'Loading playlist items', 'percent': None, 'files': []}
+    def worker():
+        try:
+            import yt_dlp
+            options = {'quiet': True, 'extract_flat': 'in_playlist', 'skip_download': True,
+                       'noplaylist': True, 'js_runtimes': {'deno': {}, 'node': {}}, 'socket_timeout': 30}
+            if cookie:
+                options['cookiefile'] = str(cookie)
+            with yt_dlp.YoutubeDL(options) as downloader:
+                info = downloader.extract_info(url, download=False)
+            is_playlist = info.get('_type') in ('playlist', 'multi_video')
+            items = []
+            if is_playlist:
+                for index, entry in enumerate(info.get('entries') or [], 1):
+                    available = bool(entry and entry.get('url') and entry.get('title') not in ('[Private video]', '[Deleted video]'))
+                    items.append({'index': index, 'title': (entry or {}).get('title') or 'Unavailable item',
+                                  'available': available, 'duration': (entry or {}).get('duration')})
+            with lock:
+                jobs[job_id].update(status='complete', is_playlist=is_playlist, items=items,
+                                    title=info.get('title') or 'Playlist', message='Choose items to download')
+        except Exception as exc:
+            with lock:
+                jobs[job_id].update(status='error', message=str(exc))
+    threading.Thread(target=worker, daemon=True).start()
+    return job_id
+
+
 def start_download(data):
     url = str(data.get('url', '')).strip()
     if urlparse(url).scheme not in ('http', 'https'):
@@ -36,6 +93,13 @@ def start_download(data):
         for part in parts:
             result = result * 60 + float(part)
         return result
+    selection = data.get('selected_items')
+    if selection is not None:
+        if not isinstance(selection, list) or not selection or len(selection) > 1000 or any(type(i) is not int or i < 1 for i in selection):
+            raise ValueError('Choose at least one valid playlist item')
+        selection = sorted(set(selection))
+        if mode == 'trim' and len(selection) != 1:
+            raise ValueError('Choose exactly one item for Trim mode')
     start = end = None
     if mode == 'trim':
         start, end = seconds(data.get('start', '')), seconds(data.get('end', ''))
@@ -43,19 +107,16 @@ def start_download(data):
             raise ValueError('End must be after start')
         if data.get('playlist'):
             raise ValueError('Trim supports one video; use full mode for a playlist')
-    cookie = str(data.get('cookies', '')).strip()
-    cookie_path = app_dir() / 'cookies' / Path(cookie).name if cookie else None
-    if cookie_path and not cookie_path.is_file():
-        raise ValueError('Cookies file not found in cookies/')
+    cookie_path = download_cookie_path(data)
     job_id = uuid.uuid4().hex
     jobs[job_id] = {'status': 'running', 'percent': 0, 'message': 'Getting video information', 'files': []}
     def update(**values):
         with lock:
             jobs[job_id].update(values)
     def item_position(info):
-        current = info.get('playlist_autonumber') or info.get('playlist_index') or len(jobs[job_id]['files']) + 1
-        total = (info.get('playlist_count') or info.get('n_entries')) if data.get('playlist') else 1
-        return int(current), int(total) if total else None
+        current = len(jobs[job_id]['files']) + 1
+        total = len(selection) if selection else ((info.get('playlist_count') or info.get('n_entries')) if data.get('playlist') else 1)
+        return current, int(total) if total else None
     def report(stage, info, percent):
         current, total = item_position(info)
         update(stage=stage, item=current, total=total, percent=percent,
@@ -73,7 +134,12 @@ def start_download(data):
                 pct = d.get('downloaded_bytes', 0) / total * 100 if total else 0
                 report('Downloading', d.get('info_dict', {}), round(min(100, pct), 1))
             with tempfile.TemporaryDirectory(dir=output, prefix='.download-') as temporary:
-                options = {'outtmpl': str(Path(temporary) / '%(id)s.%(ext)s'), 'noplaylist': not bool(data.get('playlist')), 'progress_hooks': [hook], 'quiet': True, 'ffmpeg_location': ffmpeg}
+                options = {'outtmpl': str(Path(temporary) / '%(id)s.%(ext)s'), 'noplaylist': not bool(data.get('playlist') or selection), 'progress_hooks': [hook], 'quiet': True, 'ffmpeg_location': ffmpeg, 'js_runtimes': {'deno': {}, 'node': {}}}
+                # noplaylist alone does not limit a playlist-only URL.
+                if selection:
+                    options['playlist_items'] = ','.join(map(str, selection))
+                elif not data.get('playlist'):
+                    options['playlist_items'] = '1'
                 cap = '' if quality == 'best' else '[height<=' + quality + ']'
                 options['format'] = 'bestaudio/best' if fmt == 'mp3' else 'bestvideo' + cap + '+bestaudio/best' + cap
                 if cookie_path:

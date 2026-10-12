@@ -287,3 +287,15 @@ export function initDropdown({ root, trigger, menu, onSelect }) {
     }
   });
 }
+
+export function initCollapsiblePanels(root = document) {
+  root.querySelectorAll('.collapsible').forEach(panel => {
+    const button = panel.querySelector('.panel-toggle');
+    const content = panel.querySelector('.panel-content');
+    button.addEventListener('click', () => {
+      const collapsed = panel.classList.toggle('collapsed');
+      button.setAttribute('aria-expanded', String(!collapsed));
+      content.hidden = collapsed;
+    });
+  });
+}

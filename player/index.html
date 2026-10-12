@@ -40,8 +40,9 @@
         </div>
       </div>
 
-      <div class="card animate-fade-up" style="animation-delay: 50ms">
-        <h3 class="section-title">Add track</h3>
+      <div class="card collapsible add-track-panel animate-fade-up" style="animation-delay: 50ms">
+        <button type="button" class="panel-toggle" aria-expanded="true" aria-controls="addTrackContent"><span class="section-title">Add track</span><span class="panel-chevron" data-icon="chevron-down"></span></button>
+        <div class="panel-content" id="addTrackContent">
         <label class="field">
           <span class="field-label">Track name</span>
           <input class="input" type="text" id="trackTitle" placeholder="Song name (optional)">
@@ -62,14 +63,15 @@
           <input class="input" type="text" id="filePath" placeholder="C:\Users\you\Music\song.mp3">
         </label>
         <button class="btn btn-primary w-full" id="addTrackBtn" disabled>Add to playlist</button>
+        </div>
       </div>
 
-      <div class="card grow panel animate-fade-up" style="animation-delay: 80ms">
-        <div class="section-head">
-          <h2>Tracks</h2>
+      <div class="card grow panel collapsible tracks-panel animate-fade-up" style="animation-delay: 80ms">
+        <button type="button" class="panel-toggle" aria-expanded="true" aria-controls="tracksContent"><span class="section-title">Tracks</span><span class="panel-chevron" data-icon="chevron-down"></span></button>
+        <div class="panel-content tracks-content" id="tracksContent">
           <span class="muted drag-hint"><span data-icon="grip" data-icon-class="icon-sm"></span> drag to reorder</span>
+          <div class="scroll-list track-list" id="trackList"></div>
         </div>
-        <div class="scroll-list track-list" id="trackList"></div>
       </div>
     </section>
 
