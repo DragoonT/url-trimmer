@@ -7,8 +7,8 @@ async function start() {
   try {
     if (!token) {
       const r = await fetch('/api/accounts/connect', {method: 'POST', headers: {'Content-Type': 'application/json', 'X-Trim-Playlist': '1'}, body: JSON.stringify({platform: new URLSearchParams(location.search).get('platform')})});
-      const data = await r.json();
-      if (!r.ok) throw Error(data.error);
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok) throw Error(data.error || "Open Trim Playlist on this computer, then connect. The extension reaches the app while it is running.");
       token = data.token;
     }
     status.textContent = 'Contacting the browser extension…';

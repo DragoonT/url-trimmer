@@ -1218,8 +1218,9 @@ body {
 .account-list { display:grid; gap:6px; margin-top:8px; }
 .account-row { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:8px; border:1px solid var(--border); border-radius:8px; font-size:.82rem; }
 .cookie-create { width:100%; margin-top:8px; }
-.cookie-choices { display:flex; flex-direction:column; gap:8px; }
-.cookie-choices .btn { display:flex; width:100%; min-height:48px; justify-content:flex-start; }
+.cookie-kind-modal { display:block; height:auto; max-height:none; overflow:visible; }
+.cookie-kind-modal .cookie-choices { display:flex; flex-direction:column; gap:8px; }
+.cookie-kind-modal .cookie-choices .btn { display:flex; width:100%; min-height:48px; justify-content:flex-start; }
 .modal-overlay .cookie-editor-modal,
 .modal-overlay .modal { height:auto; max-height:calc(100vh - 32px); overflow:auto; }
 .cookie-editor-modal { max-width:640px; }

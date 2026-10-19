@@ -28,7 +28,7 @@ function chooseKind() {
   return new Promise((resolve) => {
     const node = overlay();
     node.innerHTML = `
-      <div class="modal card" role="dialog" aria-modal="true">
+      <div class="modal card cookie-kind-modal" role="dialog" aria-modal="true">
         <div class="modal-head"><h3>Create cookie file</h3><button type="button" class="modal-close" aria-label="Close">${icon("x")}</button></div>
         <div class="modal-body cookie-choices">
           <p class="muted modal-msg">Choose how to add the cookie file.</p>

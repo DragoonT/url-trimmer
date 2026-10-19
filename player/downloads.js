@@ -183,7 +183,7 @@ function updateAuthentication(){
  panel.querySelector('#extensionConnect').hidden=source!=='extension';
  panel.querySelector('#appSignInBox').hidden=source!=='platform';
  panel.querySelector('#authCookie').hidden=source!=='cookie';
- connectLink.href='/connect.html?platform='+encodeURIComponent(form.elements.platform.value);
+ connectLink.href='connect.html?platform='+encodeURIComponent(form.elements.platform.value);
  if(account)refreshAccounts();
 }
 form.elements.auth_source.onchange=updateAuthentication;
@@ -193,7 +193,7 @@ panel.querySelector('#appSignIn').onclick=async()=>{
  const platform=form.elements.platform.value;
  connectingPlatform={platform,previous:accountVersions.get(platform)||0};
  const statusLine=panel.querySelector('#appSignInStatus');
- if(!window.pywebview?.api?.sign_in){statusLine.textContent='Platform account signs in inside the Trim Playlist app window. In a browser, use Extension account.';return;}
+ if(!window.pywebview?.api?.sign_in){const pages={youtube:'https://accounts.google.com/ServiceLogin?service=youtube&hl=en&passive=true&continue=https%3A%2F%2Fm.youtube.com%2F',facebook:'https://m.facebook.com/login',instagram:'https://www.instagram.com/accounts/login/',x:'https://x.com/i/flow/login',tiktok:'https://www.tiktok.com/login',twitch:'https://www.twitch.tv/login'};const opened=window.open(pages[platform],'trim-platform-signin','width=420,height=760');statusLine.textContent=opened?'Sign-in window opened, the same page the app uses.':'Allow the sign-in window, then choose Sign in again.';return;}
  statusLine.textContent='Opening sign-in in the app window…';
  try{const result=await window.pywebview.api.sign_in(platform);if(result&&result.error)throw Error(result.error);}
  catch(error){statusLine.textContent=error.message||'Could not open sign-in';}
