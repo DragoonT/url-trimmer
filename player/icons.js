@@ -4,6 +4,9 @@ const SVG_ATTRS =
   'xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"';
 
 const PATHS = {
+  wifi: '<path d="M2 8a16 16 0 0 1 20 0M5 12a11 11 0 0 1 14 0M8 16a5 5 0 0 1 8 0"/><circle cx="12" cy="20" r="1"/>',
+  'wifi-off': '<path d="m2 2 20 20M2 8a16 16 0 0 1 6-3M12 4a16 16 0 0 1 10 4M5 12a11 11 0 0 1 7-2M16 11l3 1M8 16a5 5 0 0 1 8 0"/><circle cx="12" cy="20" r="1"/>',
+
   music:
     '<path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/>',
   upload:

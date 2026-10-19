@@ -5,6 +5,7 @@ import {
   initFileUpload,
   initDropdown,
   initCollapsiblePanels,
+  createChoiceDropdown,
 } from "./ui.js";
 import { initSortableList } from "./dnd.js";
 import { icon, setIcon, mountIcons } from "./icons.js";
@@ -72,6 +73,65 @@ const fileUpload = initFileUpload({
   list: document.getElementById("fileList"),
   titleEl: document.getElementById("fileUploadTitle"),
 });
+
+let onlinePreview=null,onlineSelection=new Set(),onlineLoading=false,onlineAdding=false;
+function setOnlineLoadProgress(percent,visible=false){const bar=document.querySelector('#onlineLoadProgress');bar.hidden=!visible;bar.querySelector('div').style.width=`${Math.max(0,Math.min(100,Number(percent)||0))}%`;}
+function clearOnlinePreview(){onlinePreview=null;onlineSelection.clear();document.querySelector('#onlinePreview').hidden=true;setOnlineLoadProgress(0,false);updatePlaylistActions();}
+const sourceChoice=createChoiceDropdown(document.querySelector('#trackSourceSelect'),[['offline','Offline'],['online','Online']],'offline',()=>{
+ document.querySelector('#offlineTrackFields').hidden=sourceChoice.value!=='offline';document.querySelector('#onlineTrackFields').hidden=sourceChoice.value!=='online';updatePlaylistActions();
+});
+const onlineCookieChoice=createChoiceDropdown(document.querySelector('#onlineTrackCookies'),[['','No cookies']],'',clearOnlinePreview);
+const playbackChoice=createChoiceDropdown(document.querySelector('#onlinePlaybackSelect'),[['video','Video'],['audio','Audio only']],'video');
+const onlineSelectionChoice=createChoiceDropdown(document.querySelector('#onlineSelectionSelect'),[['single','Single video'],['all','Entire playlist']],'single',renderOnlineChoices);
+const onlineUrl=document.querySelector('#onlineTrackUrl');onlineUrl.addEventListener('input',clearOnlinePreview);
+async function refreshOnlineCookies(){try{const names=await api('/api/cookies');onlineCookieChoice.fill([['','No cookies'],...names.map(name=>[name,name])]);}catch(error){showToast(error.message,'error');}}
+onlineCookieChoice.trigger.addEventListener('click',refreshOnlineCookies);refreshOnlineCookies();
+function renderOnlineChoices(){
+ const list=document.querySelector('#onlineTrackChoices');list.replaceChildren();onlineSelection.clear();
+ if(!onlinePreview)return;
+ const all=onlineSelectionChoice.value==='all'||!onlinePreview.is_playlist;
+ document.querySelector('#onlineSelectionType').hidden=!onlinePreview.is_playlist;
+ for(const item of onlinePreview.items){
+  if(all&&item.available)onlineSelection.add(item.index);
+  const row=document.createElement('button');row.type='button';row.className='playlist-choice';row.setAttribute('role','radio');row.setAttribute('aria-checked',String(all&&item.available));row.disabled=!item.available||all;
+  const check=document.createElement('span');check.className='choice-check';check.innerHTML=icon('check');const label=document.createElement('span');label.textContent=item.title+(item.available?'':' · Unavailable');row.append(check,label);list.append(row);
+  row.onclick=()=>{onlineSelection.clear();onlineSelection.add(item.index);list.querySelectorAll('[aria-checked]').forEach(button=>button.setAttribute('aria-checked',String(button===row)));updateOnlineCount();};
+ }
+ updateOnlineCount();
+}
+function updateOnlineCount(){document.querySelector('#onlineSelectionCount').textContent=onlineSelection.size+' selected · URLs only, no media files saved';updatePlaylistActions();}
+document.querySelector('#loadOnlineUrl').onclick=async()=>{
+ if(onlineLoading)return;const url=onlineUrl.value.trim(),cookies=onlineCookieChoice.value;const status=document.querySelector('#onlineLoadStatus');
+ clearOnlinePreview();onlineLoading=true;document.querySelector('#loadOnlineUrl').disabled=true;status.textContent='Preparing URL · 0%';setOnlineLoadProgress(0,true);
+ try{
+  const response=await api('/api/downloads/preview',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({url,cookies,auth_source:'cookie'})});
+  let job;do{await new Promise(resolve=>setTimeout(resolve,350));job=await api('/api/downloads/'+response.id);const percent=job.percent??0;status.textContent=`${job.message||'Loading URL'} · ${percent}%`;setOnlineLoadProgress(percent,true);}while(job.status==='running');
+  if(job.status==='error')throw Error(job.message);
+  if(url!==onlineUrl.value.trim()||cookies!==onlineCookieChoice.value){status.textContent='URL or cookies changed. Load again.';return;}
+  onlinePreview={...job,id:response.id};document.querySelector('#onlinePreview').hidden=false;renderOnlineChoices();status.textContent=`${job.title} · 100%`;setOnlineLoadProgress(100,true);
+ }catch(error){status.textContent=error.message;setOnlineLoadProgress(0,false);showToast(error.message,'error');}
+ finally{onlineLoading=false;document.querySelector('#loadOnlineUrl').disabled=false;updatePlaylistActions();}
+};
+function networkState(){
+ const connection=navigator.connection||navigator.mozConnection||navigator.webkitConnection;
+ if(!navigator.onLine)return {kind:'offline',label:'Offline'};
+ if(connection?.type==='ethernet')return {kind:'lan',label:'LAN'};
+ const effective=connection?.effectiveType||'';
+ const downlink=Number(connection?.downlink);
+ const kind=effective==='slow-2g'||effective==='2g'||(Number.isFinite(downlink)&&downlink<1)?'poor':effective==='3g'||(Number.isFinite(downlink)&&downlink<5)?'fair':'strong';
+ return {kind,label:kind==='strong'?'Wi-Fi':kind==='fair'?'Wi-Fi · fair':'Wi-Fi · poor'};
+}
+function renderNetworkStatus(status,state){
+ status.className=`network-status network-${state.kind}`;
+ status.innerHTML=`<span class="signal-bars" aria-hidden="true"><i></i><i></i><i></i><i></i></span><span>${state.label}</span>`;
+ status.title='Connection status reported by your device. Signal quality uses the browser network estimate.';
+}
+function updateNetworkStatus(){
+ const state=networkState();renderNetworkStatus(document.querySelector('#networkStatus'),state);
+ document.querySelectorAll('.track-item[data-online="true"] .track-connection').forEach(badge=>renderNetworkStatus(badge,state));
+}
+window.addEventListener('online',updateNetworkStatus);window.addEventListener('offline',updateNetworkStatus);
+(navigator.connection||navigator.mozConnection||navigator.webkitConnection)?.addEventListener?.('change',updateNetworkStatus);updateNetworkStatus();
 
 function tracks() {
   return state.currentPlaylist?.items || [];
@@ -314,7 +374,7 @@ function updatePlaylistActions() {
   const enabled = Boolean(state.currentPlaylistId);
   els.renamePlaylistBtn.disabled = !enabled;
   els.deletePlaylistBtn.disabled = !enabled;
-  els.addTrackBtn.disabled = !enabled;
+  els.addTrackBtn.disabled = !enabled || (sourceChoice.value === 'online' && (onlineLoading || onlineAdding || !onlinePreview || !onlineSelection.size));
 }
 
 async function loadPlaylists(selectId = state.currentPlaylistId) {
@@ -400,13 +460,14 @@ function renderTracks() {
     row.className = `track-item${index === state.index ? " active" : ""}`;
     row.dataset.index = String(index);
     row.dataset.id = track.id;
+    row.dataset.online = String(track.source === 'online');
     row.innerHTML = `
       <div class="drag-handle" title="Drag to reorder">${icon("grip")}</div>
       <div class="track-index">${index + 1}</div>
       <button type="button" class="track-main">
         <div class="track-name">${escapeHtml(track.title)}</div>
         <div class="track-type ${track.missing ? "missing" : ""}">
-          ${track.missing ? "missing · " : ""}${track.ext || "?"} · ${track.kind || "audio"}
+          ${track.missing ? "missing · " : ""}${track.source === "online" ? "Online URL" : "Local file"} · ${track.kind || "audio"}
           ${track.videoHeight ? ` · ${track.videoHeight}p` : ""}
         </div>
       </button>
@@ -425,7 +486,18 @@ function renderTracks() {
         confirmLabel: "Remove",
       });
       if (!ok) return;
+      const wasPlaying = Number(row.dataset.index) === state.index;
       await api(`/api/playlists/${state.currentPlaylistId}/items/${track.id}`, { method: "DELETE" });
+      if (wasPlaying) {
+        stopAll();
+        state.index = -1;
+        els.video.style.display = "none";
+        els.audioArt.classList.remove("show", "playing");
+        els.nowTitle.textContent = "No track selected";
+        els.nowMeta.textContent = "Choose a track from the playlist";
+        els.nowBadge.textContent = "";
+        updatePlayButton(false);
+      }
       await selectPlaylist(state.currentPlaylistId);
       await loadPlaylists(state.currentPlaylistId);
       showToast("Track removed", "success");
@@ -571,6 +643,7 @@ async function playIndex(index, seekTime = 0, autoplay = true) {
   if (index < 0 || index >= items.length) return;
   const track = items[index];
   if (track.missing) return;
+  if(track.source==='online'&&!navigator.onLine){showToast('You are offline. Connect to play this online track.','warning');return;}
 
   state.index = index;
   const url = mediaUrl(track);
@@ -589,7 +662,7 @@ async function playIndex(index, seekTime = 0, autoplay = true) {
       : track.videoHeight
         ? ` · ${track.videoHeight}p`
         : "";
-  els.nowMeta.textContent = `${(track.ext || "").toUpperCase()} · ${track.kind}${qualityNote}`;
+  els.nowMeta.textContent = track.source === "online" ? `Online URL · ${track.kind} · Internet required` : `${(track.ext || "").toUpperCase()} · ${track.kind}${qualityNote}`;
 
   updateTrackActiveStates();
 
@@ -610,10 +683,12 @@ async function playIndex(index, seekTime = 0, autoplay = true) {
         resolve();
         return;
       }
+      const timeout=setTimeout(()=>resolve(),30000);
+      el.addEventListener('error',()=>{clearTimeout(timeout);resolve();},{once:true});
       el.addEventListener(
         "loadedmetadata",
         () => {
-          applySeek();
+          clearTimeout(timeout);applySeek();
           resolve();
         },
         { once: true },
@@ -632,17 +707,20 @@ async function playIndex(index, seekTime = 0, autoplay = true) {
     }
     saveSession();
   } catch (err) {
-    if (track.kind === "video" && state.videoQuality !== "original") {
+    if (track.source !== "online" && track.kind === "video" && state.videoQuality !== "original") {
       showToast("Quality transcode failed — playing original", "warning");
       state.videoQuality = "original";
       saveSession();
       await playIndex(index, seekTime, autoplay);
       return;
     }
-    await waitForSeek();
     updatePlayButton(false);
     els.audioArt.classList.remove("playing");
     saveSession();
+    if(track.source==='online'&&err?.name!=='NotAllowedError'){
+      const selected=state.videoQuality==='original'?'best available quality':`${state.videoQuality}p`;
+      showToast(`Online ${selected} stream is unavailable. Choose Best available or a lower quality.`, 'error');
+    }
     if (autoplay && err?.name === "NotAllowedError") {
       showToast("Click play to continue", "info");
     }
@@ -850,6 +928,15 @@ els.deletePlaylistBtn.addEventListener("click", async () => {
 els.addTrackBtn.addEventListener("click", async () => {
   if (!state.currentPlaylistId) return;
   const title = els.trackTitle.value.trim();
+  if(sourceChoice.value==='online'){
+   if(!onlinePreview||!onlineSelection.size||onlineAdding)return;
+   onlineAdding=true;els.addTrackBtn.disabled=true;
+   try{
+    const result=await api(`/api/playlists/${state.currentPlaylistId}/online-items`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({preview_id:onlinePreview.id,indexes:[...onlineSelection],playback:playbackChoice.value,title})});
+    clearOnlinePreview();els.trackTitle.value='';await selectPlaylist(state.currentPlaylistId);await loadPlaylists(state.currentPlaylistId);showToast(result.added+' online track(s) added','success');
+   }catch(error){showToast(error.message,'error');}finally{onlineAdding=false;updatePlaylistActions();}
+   return;
+  }
   const files = fileUpload.getFiles();
   const path = els.filePath.value.trim();
 

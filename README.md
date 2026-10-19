@@ -178,6 +178,17 @@ Run **`dist/personal-setup/TrimPlaylistPersonalSetup.exe`** from within this pro
 
 The setup tool does not create a signed-in session on its own. It imports an existing export or prepares the optional connector.
 
+## Online tracks in Trim Playlist
+
+The **Add track** panel has a **Source** control:
+
+- **Offline** adds files from your PC, as before.
+- **Online** adds a video or audio stream by URL without downloading a media file into the playlist.
+
+For an online URL, choose an optional cookie file, select **Video** or **Audio only**, then click **Load URL**. A playlist URL shows every available video. Choose **Single video** to select one item, or **Entire playlist** to add all available items. The saved playlist can mix online and offline tracks.
+
+Online tracks show an **Online** or **Offline** connection badge in the Tracks panel. Playback requires an internet connection and, for private content, a cookie session that still has access. The app keeps the URL and selected cookie filename locally; it does not save streamed media files or signed stream URLs.
+
 ## Command line
 
 ```powershell

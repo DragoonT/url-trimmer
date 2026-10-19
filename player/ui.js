@@ -263,9 +263,21 @@ function formatSize(bytes) {
 }
 
 export function initDropdown({ root, trigger, menu, onSelect }) {
+  const close = () => {
+    menu.classList.remove("open");
+    trigger.setAttribute("aria-expanded", "false");
+  };
+
   trigger.addEventListener("click", (e) => {
     e.stopPropagation();
     const open = !menu.classList.contains("open");
+    // Dropdown triggers stop propagation so the document click handler cannot
+    // close a previously-open control. Do it here before opening this menu.
+    document.querySelectorAll(".dropdown-menu.open").forEach((other) => {
+      if (other === menu) return;
+      other.classList.remove("open");
+      other.parentElement?.querySelector(".dropdown-trigger")?.setAttribute("aria-expanded", "false");
+    });
     menu.classList.toggle("open", open);
     trigger.setAttribute("aria-expanded", open ? "true" : "false");
   });
@@ -275,15 +287,13 @@ export function initDropdown({ root, trigger, menu, onSelect }) {
     if (!item || item.disabled || item.classList.contains("disabled")) return;
     menu.querySelectorAll("[data-value]").forEach((el) => el.classList.remove("active"));
     item.classList.add("active");
-    menu.classList.remove("open");
-    trigger.setAttribute("aria-expanded", "false");
+    close();
     onSelect?.(item.dataset.value, item.textContent.trim());
   });
 
   document.addEventListener("click", (e) => {
     if (!root.contains(e.target)) {
-      menu.classList.remove("open");
-      trigger.setAttribute("aria-expanded", "false");
+      close();
     }
   });
 }
@@ -298,4 +308,18 @@ export function initCollapsiblePanels(root = document) {
       content.hidden = collapsed;
     });
   });
+}
+
+export function createChoiceDropdown(host, choices, initial, onChange) {
+  host.classList.add('dropdown', 'download-select');
+  const trigger=document.createElement('button');trigger.type='button';trigger.className='input dropdown-trigger';trigger.setAttribute('aria-expanded','false');trigger.setAttribute('aria-haspopup','listbox');
+  const label=document.createElement('span');trigger.append(label);trigger.insertAdjacentHTML('beforeend',icon('chevron-down'));
+  const menu=document.createElement('div');menu.className='dropdown-menu';menu.setAttribute('role','listbox');host.append(trigger,menu);
+  let value=initial;
+  function fill(options){menu.replaceChildren();if(!options.some(([key])=>key===value))value=options[0]?.[0]||'';for(const [key,text] of options){const button=document.createElement('button');button.type='button';button.className='dropdown-item';button.dataset.value=key;button.textContent=text;button.setAttribute('role','option');menu.append(button);}label.textContent=options.find(([key])=>key===value)?.[1]||'';}
+  fill(choices);
+  initDropdown({root:host,trigger,menu,onSelect:(key,text)=>{value=key;label.textContent=text;onChange?.(key);}});
+  trigger.addEventListener('keydown',event=>{if(event.key==='ArrowDown'){event.preventDefault();menu.classList.add('open');trigger.setAttribute('aria-expanded','true');menu.querySelector('button')?.focus();}});
+  menu.addEventListener('keydown',event=>{const buttons=[...menu.children];const index=buttons.indexOf(document.activeElement);if(event.key==='ArrowDown'||event.key==='ArrowUp'){event.preventDefault();buttons[(index+(event.key==='ArrowDown'?1:-1)+buttons.length)%buttons.length]?.focus();}if(event.key==='Escape'){menu.classList.remove('open');trigger.setAttribute('aria-expanded','false');trigger.focus();}});
+  return {get value(){return value;},fill,trigger};
 }

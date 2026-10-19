@@ -40,25 +40,43 @@ def preview_download(data):
     cookie = download_cookie_path(data)
     job_id = uuid.uuid4().hex
     with lock:
-        jobs[job_id] = {'status': 'running', 'message': 'Loading playlist items', 'percent': None, 'files': []}
+        jobs[job_id] = {'status': 'running', 'message': 'Preparing URL', 'percent': 0, 'files': []}
     def worker():
         try:
             import yt_dlp
+            # Preview must expand a playlist so the user can choose one video or the
+            # entire list.  This only reads metadata; it never downloads media.
             options = {'quiet': True, 'extract_flat': 'in_playlist', 'skip_download': True,
-                       'noplaylist': True, 'js_runtimes': {'deno': {}, 'node': {}}, 'socket_timeout': 30}
+                       'noplaylist': False, 'js_runtimes': {'deno': {}, 'node': {}}, 'socket_timeout': 30}
             if cookie:
                 options['cookiefile'] = str(cookie)
+            with lock:
+                jobs[job_id].update(percent=20, message='Connecting to platform')
             with yt_dlp.YoutubeDL(options) as downloader:
+                with lock:
+                    jobs[job_id].update(percent=45, message='Reading video or playlist')
                 info = downloader.extract_info(url, download=False)
+            with lock:
+                jobs[job_id].update(percent=80, message='Preparing available tracks')
             is_playlist = info.get('_type') in ('playlist', 'multi_video')
             items = []
             if is_playlist:
                 for index, entry in enumerate(info.get('entries') or [], 1):
                     available = bool(entry and entry.get('url') and entry.get('title') not in ('[Private video]', '[Deleted video]'))
                     items.append({'index': index, 'title': (entry or {}).get('title') or 'Unavailable item',
-                                  'available': available, 'duration': (entry or {}).get('duration')})
+                                  'available': available, 'duration': (entry or {}).get('duration'),
+                                  'url': (entry or {}).get('webpage_url') or (entry or {}).get('url', '')})
+            if not is_playlist:
+                items = [{'index': 1, 'title': info.get('title') or 'Online track', 'available': True,
+                          'url': info.get('webpage_url') or url, 'duration': info.get('duration')}]
+            for item in items:
+                if urlparse(item['url']).scheme not in ('http', 'https') and re.fullmatch(r'[\w-]{11}', item['url']):
+                    item['url'] = 'https://www.youtube.com/watch?v=' + item['url']
+                if urlparse(item['url']).scheme not in ('http', 'https'):
+                    item['available'] = False
             with lock:
-                jobs[job_id].update(status='complete', is_playlist=is_playlist, items=items,
+                jobs[job_id].update(status='complete', percent=100, is_playlist=is_playlist, items=items,
+                                    cookies=cookie.name if cookie else '', 
                                     title=info.get('title') or 'Playlist', message='Choose items to download')
         except Exception as exc:
             with lock:

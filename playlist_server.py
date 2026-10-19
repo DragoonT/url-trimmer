@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+from functools import wraps
 import json
 import mimetypes
 import re
@@ -20,6 +21,7 @@ from urllib.parse import parse_qs, unquote, urlparse
 from app_paths import app_dir, resource_dir, run_hidden
 from download_jobs import start_download, get_job, preview_download
 import account_connections
+from online_media import build_online_items, resolve_stream
 
 QUALITY_HEIGHTS = (1080, 720, 480, 360)
 
@@ -40,6 +42,17 @@ DEFAULT_PLAYER_SESSION = {
     "videoQuality": "original",
     "savedAt": 0,
 }
+
+
+_playlist_lock = threading.RLock()
+
+
+def playlist_mutation(function):
+    @wraps(function)
+    def locked(*args, **kwargs):
+        with _playlist_lock:
+            return function(*args, **kwargs)
+    return locked
 
 
 def slugify(name: str) -> str:
@@ -333,6 +346,24 @@ class PlaylistHandler(SimpleHTTPRequestHandler):
             self.send_json(playlist, 201)
             return
 
+        if path.startswith('/api/playlists/') and path.endswith('/online-items'):
+            try:
+                payload = self.read_json()
+                tracks = build_online_items(payload, get_job(str(payload.get('preview_id', ''))))
+                playlist_id = path.split('/')[3]
+                with _playlist_lock:
+                    data = load_playlist(playlist_id)
+                    if data is None:
+                        raise ValueError('Playlist not found')
+                    for track in tracks:
+                        track['id'] = uuid.uuid4().hex
+                    data['items'].extend(tracks)
+                    save_playlist(data)
+                self.send_json({'added': len(tracks)}, 201)
+            except (ValueError, TypeError) as exc:
+                self.send_json({'error': str(exc)}, 400)
+            return
+
         if path.startswith("/api/playlists/") and path.endswith("/items"):
             playlist_id = path.split("/")[3]
             content_type = self.headers.get("Content-Type", "")
@@ -430,6 +461,9 @@ class PlaylistHandler(SimpleHTTPRequestHandler):
         if item is None:
             self.send_error(404)
             return
+        if item.get('source') == 'online':
+            self.serve_online(item, quality)
+            return
         media_path = resolve_item_path(playlist_id, item)
         if media_path is None:
             self.send_error(404, "Media file missing")
@@ -469,6 +503,62 @@ class PlaylistHandler(SimpleHTTPRequestHandler):
             shutil.copyfileobj(fh, self.wfile)
 
 
+    def serve_online(self, item, quality='original'):
+        try:
+            stream = resolve_stream(item, quality)
+            if stream.get('adaptive'):
+                self.serve_adaptive_online(stream)
+                return
+            headers = dict(stream['headers'])
+            headers['Accept-Encoding'] = 'identity'
+            if self.headers.get('Range'):
+                headers['Range'] = self.headers['Range']
+            request = urllib.request.Request(stream['url'], headers=headers)
+            upstream = urllib.request.urlopen(request, timeout=20)
+        except ValueError as exc:
+            self.send_json({'error': str(exc)}, 422)
+            return
+        except Exception:
+            self.send_json({'error': 'Online stream unavailable. Check internet access and the selected cookie session.'}, 502)
+            return
+        try:
+            with upstream:
+                self.send_response(upstream.status)
+                self.send_header('Content-Type', stream['mime'])
+                self.send_header('Cache-Control', 'no-store')
+                for name in ('Content-Length', 'Content-Range', 'Accept-Ranges'):
+                    if upstream.headers.get(name):
+                        self.send_header(name, upstream.headers[name])
+                self.end_headers()
+                while True:
+                    chunk = upstream.read(64 * 1024)
+                    if not chunk:
+                        break
+                    self.wfile.write(chunk)
+        except (OSError, BrokenPipeError, ConnectionResetError):
+            pass  # Seeking or switching tracks closes the previous stream.
+
+    def serve_adaptive_online(self, stream):
+        ffmpeg = find_ffmpeg()
+        if not ffmpeg:
+            self.send_json({'error': 'FFmpeg is unavailable for high-quality online playback'}, 503)
+            return
+        header_lines = ''.join(f'{name}: {value}\r\n' for name, value in stream['headers'].items())
+        command = [ffmpeg, '-loglevel', 'error', '-headers', header_lines, '-i', stream['video_url'],
+                   '-headers', header_lines, '-i', stream['audio_url'], '-c', 'copy',
+                   '-movflags', 'frag_keyframe+empty_moov+default_base_moof', '-f', 'mp4', 'pipe:1']
+        process = subprocess.Popen(command, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, **hidden_subprocess_kwargs())
+        try:
+            self.send_response(200); self.send_header('Content-Type', 'video/mp4'); self.send_header('Cache-Control', 'no-store'); self.end_headers()
+            while chunk := process.stdout.read(64 * 1024):
+                self.wfile.write(chunk)
+        except (OSError, BrokenPipeError, ConnectionResetError):
+            pass
+        finally:
+            process.kill(); process.wait(timeout=2)
+
+
+
 def playlist_path(playlist_id: str) -> Path:
     return PLAYLISTS_DIR / f"{playlist_id}.json"
 
@@ -476,6 +566,15 @@ def playlist_path(playlist_id: str) -> Path:
 def enrich_playlist(data: dict, playlist_id: str) -> dict:
     enriched = json.loads(json.dumps(data))
     for item in enriched.get("items", []):
+        if item.get('source') == 'online':
+            qualities = []
+            if item.get('kind') == 'video':
+                qualities = [
+                    {'id': 'original', 'label': 'Best available', 'available': True},
+                    *[{'id': str(height), 'label': f'Up to {height}p', 'available': True} for height in QUALITY_HEIGHTS],
+                ]
+            item.update(missing=False, ext='stream', videoHeight=None, qualities=qualities)
+            continue
         file_path = resolve_item_path(playlist_id, item)
         ref = item.get("file") or item.get("path", "")
         item["ext"] = Path(ref).suffix.lower().lstrip(".")
@@ -499,12 +598,17 @@ def load_playlist(playlist_id: str) -> dict | None:
     return enrich_playlist(data, playlist_id)
 
 
+@playlist_mutation
 def save_playlist(data: dict) -> None:
     PLAYLISTS_DIR.mkdir(parents=True, exist_ok=True)
-    playlist_path(data["id"]).write_text(
-        json.dumps(data, ensure_ascii=False, indent=2),
-        encoding="utf-8",
-    )
+    destination = playlist_path(data['id'])
+    temporary = destination.with_name(destination.name + '.' + uuid.uuid4().hex + '.tmp')
+    try:
+        temporary.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding='utf-8')
+        temporary.replace(destination)
+    finally:
+        temporary.unlink(missing_ok=True)
+
 
 
 def list_playlists() -> list[dict]:
@@ -535,6 +639,7 @@ def unique_playlist_id(name: str) -> str:
     return candidate
 
 
+@playlist_mutation
 def create_playlist(name: str) -> dict:
     playlist_id = unique_playlist_id(name)
     data = {"id": playlist_id, "name": name.strip() or "New playlist", "items": []}
@@ -543,6 +648,7 @@ def create_playlist(name: str) -> dict:
     return data
 
 
+@playlist_mutation
 def update_playlist(playlist_id: str, payload: dict) -> dict | None:
     data = load_playlist(playlist_id)
     if data is None:
@@ -553,6 +659,7 @@ def update_playlist(playlist_id: str, payload: dict) -> dict | None:
     return load_playlist(playlist_id)
 
 
+@playlist_mutation
 def delete_playlist(playlist_id: str) -> bool:
     path = playlist_path(playlist_id)
     if not path.exists():
@@ -564,6 +671,7 @@ def delete_playlist(playlist_id: str) -> bool:
     return True
 
 
+@playlist_mutation
 def add_path_item(playlist_id: str, file_path: str, title: str) -> dict | None:
     data = load_playlist(playlist_id)
     if data is None:
@@ -605,6 +713,7 @@ def parse_multipart(rfile, content_type: str, content_length: int) -> dict[str, 
     return parts
 
 
+@playlist_mutation
 def add_uploaded_item(playlist_id: str, rfile, headers, content_type: str) -> dict | None:
     data = load_playlist(playlist_id)
     if data is None:
@@ -678,6 +787,7 @@ def cleanup_orphan_uploads(playlist_id: str, data: dict) -> None:
             delete_upload_file(playlist_id, {"source": "upload", "file": f"files/{path.name}"})
 
 
+@playlist_mutation
 def remove_item(playlist_id: str, item_id: str) -> bool:
     data = load_playlist(playlist_id)
     if data is None:
@@ -692,6 +802,7 @@ def remove_item(playlist_id: str, item_id: str) -> bool:
     return True
 
 
+@playlist_mutation
 def reorder_items(playlist_id: str, order: list[str]) -> dict | None:
     data = load_playlist(playlist_id)
     if data is None or not isinstance(order, list):

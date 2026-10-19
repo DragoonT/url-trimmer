@@ -12,3 +12,7 @@ build/
 dist/
 # Atomic cookie writes may be left behind after an interrupted process
 cookies/*.tmp
+
+# User playlist metadata may contain private online URLs
+playlists/*.json
+playlists/*.tmp

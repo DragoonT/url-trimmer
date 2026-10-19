@@ -43,10 +43,12 @@
       <div class="card collapsible add-track-panel animate-fade-up" style="animation-delay: 50ms">
         <button type="button" class="panel-toggle" aria-expanded="true" aria-controls="addTrackContent"><span class="section-title">Add track</span><span class="panel-chevron" data-icon="chevron-down"></span></button>
         <div class="panel-content" id="addTrackContent">
+        <div class="field"><span class="field-label">Source</span><div id="trackSourceSelect"></div></div>
         <label class="field">
           <span class="field-label">Track name</span>
           <input class="input" type="text" id="trackTitle" placeholder="Song name (optional)">
         </label>
+        <div id="offlineTrackFields">
         <label class="field">
           <span class="field-label">Pick file from your PC</span>
           <div class="file-upload" id="fileUploadZone" tabindex="0" role="button">
@@ -62,12 +64,29 @@
           <span class="field-label">File path</span>
           <input class="input" type="text" id="filePath" placeholder="C:\Users\you\Music\song.mp3">
         </label>
+        </div>
+        <div id="onlineTrackFields" hidden>
+          <label class="field"><span class="field-label">Video or playlist URL</span><input class="input" id="onlineTrackUrl" type="url" placeholder="https://…"></label>
+          <div class="field"><span class="field-label">Cookies (optional)</span><div id="onlineTrackCookies"></div></div>
+          <div class="field"><span class="field-label">Playback</span><div id="onlinePlaybackSelect"></div></div>
+          <button type="button" class="btn btn-outline w-full" id="loadOnlineUrl">Load URL</button>
+          <p class="muted" id="onlineLoadStatus" role="status"></p>
+          <div class="online-load-progress" id="onlineLoadProgress" hidden aria-hidden="true"><div></div></div>
+          <section id="onlinePreview" hidden>
+            <div class="field" id="onlineSelectionType"><span class="field-label">Add from playlist</span><div id="onlineSelectionSelect"></div></div>
+            <div id="onlineTrackChoices" class="playlist-picker-list"></div>
+            <p class="muted" id="onlineSelectionCount"></p>
+          </section>
+        </div>
         <button class="btn btn-primary w-full" id="addTrackBtn" disabled>Add to playlist</button>
         </div>
       </div>
 
       <div class="card grow panel collapsible tracks-panel animate-fade-up" style="animation-delay: 80ms">
-        <button type="button" class="panel-toggle" aria-expanded="true" aria-controls="tracksContent"><span class="section-title">Tracks</span><span class="panel-chevron" data-icon="chevron-down"></span></button>
+        <button type="button" class="panel-toggle" aria-expanded="true" aria-controls="tracksContent">
+          <span class="tracks-heading"><span class="section-title">Tracks</span><span class="network-status" id="networkStatus" role="status"></span></span>
+          <span class="panel-chevron" data-icon="chevron-down"></span>
+        </button>
         <div class="panel-content tracks-content" id="tracksContent">
           <span class="muted drag-hint"><span data-icon="grip" data-icon-class="icon-sm"></span> drag to reorder</span>
           <div class="scroll-list track-list" id="trackList"></div>
