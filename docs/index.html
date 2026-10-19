@@ -1,17 +1,239 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" class="dark">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <meta name="description" content="Trim Playlist is a local playlist and media utility.">
   <title>Trim Playlist</title>
+  <link rel="stylesheet" href="style.css">
   <style>
-    :root{color-scheme:dark;--bg:#0e131c;--card:#171c25;--line:#293341;--muted:#a9b5c7;--blue:#91bdff}*{box-sizing:border-box}body{margin:0;background:radial-gradient(circle at 80% 0,#1b315e 0,transparent 34rem),var(--bg);color:#eef2f8;font:16px/1.6 system-ui,-apple-system,Segoe UI,sans-serif}main{max-width:900px;margin:0 auto;padding:72px 24px}nav{display:flex;justify-content:space-between;align-items:center;margin-bottom:82px}.brand{font-weight:750;font-size:1.1rem}.mark{color:#76aaff;font-size:1.5rem;margin-right:.35rem}a{color:var(--blue)}.hero{max-width:700px}.tag{color:#a9cbff;text-transform:uppercase;letter-spacing:.12em;font-size:.8rem;font-weight:700}h1{font-size:clamp(2.5rem,8vw,5.2rem);line-height:1.02;letter-spacing:-.055em;margin:.5rem 0 1.25rem}.lead{font-size:1.2rem;color:var(--muted);max-width:620px}.actions{display:flex;gap:12px;flex-wrap:wrap;margin-top:30px}.button{display:inline-block;border:1px solid #4387ff;background:#2876ff;color:#fff;text-decoration:none;padding:11px 17px;border-radius:10px;font-weight:700}.button.secondary{background:transparent;border-color:#42516a;color:#dce8ff}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px;margin-top:74px}.card{background:rgba(23,28,37,.88);border:1px solid var(--line);border-radius:16px;padding:22px}.card h2{font-size:1.1rem;margin:0 0 8px}.card p{color:var(--muted);margin:0}.notice{margin-top:48px;border-left:3px solid #4e8cff;padding:8px 16px;color:var(--muted)}footer{margin-top:80px;color:var(--muted);font-size:.9rem}
+    a.btn { text-decoration: none; }
+    .progress { height: 6px; border-radius: 99px; background: #2a3142; overflow: hidden; }
+    .progress div { height: 100%; width: 0; background: #3276ff; }
+    .status-row { display: flex; justify-content: space-between; gap: 8px; align-items: center; }
+    .track-btn { text-align: left; }
+    @media (max-width: 980px) {
+      html, body { height: auto; overflow: auto; }
+      .app { grid-template-columns: 1fr; height: auto; }
+      .player-stage { min-height: 320px; }
+    }
   </style>
 </head>
-<body><main>
-  <nav><div class="brand"><span class="mark">♫</span>Trim Playlist</div><a href="privacy.html">Privacy policy</a></nav>
-  <section class="hero"><div class="tag">Local playlists · your media</div><h1>Keep your playlist together.</h1><p class="lead">Trim Playlist is a desktop and mobile companion for organizing local tracks and online links. Your saved playlist stays on your device.</p><div class="actions"><a class="button" href="web-player.html">Open web player</a><a class="button secondary" href="https://github.com/DragoonT/url-trimmer">View on GitHub</a><a class="button secondary" href="privacy.html">Read the privacy policy</a></div></section>
-  <section class="grid"><article class="card"><h2>Desktop</h2><p>Local playlists, downloaded media, and optional account connections run on your computer.</p></article><article class="card"><h2>Phone</h2><p>The Android and iOS apps play songs stored on the phone and download into the playlist, with a progress bar.</p></article><article class="card"><h2>Web player</h2><p>A browser player is available from the Windows app on the same network. Phone downloads stay inside the app.</p></article></section>
-  <footer>© 2026 DragoonT · <a href="privacy.html">Privacy</a> · <a href="https://github.com/DragoonT/url-trimmer">GitHub</a></footer>
-</main></body></html>
+<body>
+  <div class="app">
+    <aside class="sidebar">
+      <div class="brand card">
+        <div class="brand-icon bg-brand-gradient">♫</div>
+        <div>
+          <strong>Trim Playlist</strong>
+          <p class="muted">Same player on this PC</p>
+        </div>
+      </div>
+      <div class="card installs">
+        <p class="label">Install</p>
+        <a class="btn btn-primary" href="downloads/TrimPlaylist-Android.apk">Android APK</a>
+        <a class="btn btn-outline" href="downloads/TrimPlaylist-iOS.ipa">iOS IPA</a>
+        <a class="btn btn-ghost" href="privacy.html">Privacy policy</a>
+        <a class="btn btn-ghost" href="https://github.com/DragoonT/url-trimmer">GitHub</a>
+      </div>
+      <div class="card panel">
+        <div class="section-head">
+          <h2>Playlists</h2>
+          <button class="btn btn-ghost btn-sm" id="newPlaylist" type="button">+ New</button>
+        </div>
+        <div class="scroll-list" id="playlistList"></div>
+      </div>
+    </aside>
+    <section class="library">
+      <div class="card">
+        <div class="section-head">
+          <div>
+            <p class="label">Playlist</p>
+            <h2 id="playlistName">My playlist</h2>
+          </div>
+          <div class="row gap-2">
+            <button class="btn btn-outline btn-sm" id="showPlaylist" type="button">Trim Playlist</button>
+            <button class="btn btn-outline btn-sm" id="showUrl" type="button">Trim URL</button>
+          </div>
+        </div>
+      </div>
+      <div class="card" id="playlistPane">
+        <label class="field">Pick a file on this PC
+          <input class="input" id="fileInput" type="file" accept="audio/*,video/*,.mp3,.mp4,.m4a,.webm,.mkv,.wav,.ogg,.flac" multiple>
+        </label>
+        <div class="scroll-list" id="trackList"></div>
+      </div>
+      <div class="card" id="urlPane" hidden>
+        <label class="field">Video URL
+          <input class="input" id="pageUrl" type="url" placeholder="https://…">
+        </label>
+        <button class="btn btn-primary w-full" id="startDownload" type="button">Start download</button>
+        <div class="status-row">
+          <p class="muted" id="downloadStatus"></p>
+          <button class="btn btn-ghost btn-sm" id="clearStatus" type="button">Clear</button>
+        </div>
+        <div class="progress" id="downloadTrack"><div id="downloadFill"></div></div>
+        <p class="muted">A media file saves into this playlist with a percent bar. A YouTube link is signed, so this page cannot unlock it. The Windows app unlocks, cuts, and converts it. The phone app saves the direct file YouTube gives it.</p>
+      </div>
+    </section>
+    <main class="player-stage">
+      <div class="video-stage">
+        <video id="video" playsinline hidden></video>
+        <audio id="audio" hidden></audio>
+        <div class="audio-art" id="art"><div class="vinyl"></div></div>
+      </div>
+      <div class="card" style="margin:12px">
+        <h2 id="nowTitle">Nothing playing</h2>
+        <p class="muted" id="nowTime">0:00</p>
+        <div class="row gap-2">
+          <button class="btn btn-outline btn-sm" id="prev" type="button">Prev</button>
+          <button class="btn btn-primary btn-sm" id="play" type="button">Play</button>
+          <button class="btn btn-outline btn-sm" id="next" type="button">Next</button>
+        </div>
+      </div>
+    </main>
+  </div>
+  <script>
+    const KEY = "trim-playlists-web";
+    const dbReady = new Promise((resolve, reject) => {
+      const request = indexedDB.open("trim-playlist-web", 1);
+      request.onupgradeneeded = () => request.result.createObjectStore("files");
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+    let library = JSON.parse(localStorage.getItem(KEY) || "null") || [{ id: "home", name: "My playlist", tracks: [] }];
+    let selected = 0;
+    let current = -1;
+    let url = null;
+    const playlist = () => library[selected];
+    const save = () => localStorage.setItem(KEY, JSON.stringify(library));
+    const storeFile = async (id, blob) => {
+      const db = await dbReady;
+      await new Promise((resolve, reject) => {
+        const tx = db.transaction("files", "readwrite");
+        tx.objectStore("files").put(blob, id);
+        tx.oncomplete = resolve;
+        tx.onerror = () => reject(tx.error);
+      });
+    };
+    const loadFile = async (id) => {
+      const db = await dbReady;
+      return new Promise((resolve, reject) => {
+        const tx = db.transaction("files", "readonly");
+        const request = tx.objectStore("files").get(id);
+        request.onsuccess = () => resolve(request.result);
+        request.onerror = () => reject(request.error);
+      });
+    };
+    const list = document.querySelector("#playlistList");
+    const tracks = document.querySelector("#trackList");
+    const video = document.querySelector("#video");
+    const audio = document.querySelector("#audio");
+    function paint() {
+      document.querySelector("#playlistName").textContent = playlist().name;
+      list.innerHTML = "";
+      library.forEach((item, index) => {
+        const button = document.createElement("button");
+        button.className = "btn btn-ghost w-full track-btn";
+        button.textContent = item.name + " · " + item.tracks.length;
+        button.onclick = () => { selected = index; current = -1; paint(); };
+        list.append(button);
+      });
+      tracks.innerHTML = "";
+      playlist().tracks.forEach((track, index) => {
+        const button = document.createElement("button");
+        button.className = "btn btn-ghost w-full track-btn";
+        button.textContent = track.title;
+        button.onclick = () => play(index);
+        tracks.append(button);
+      });
+    }
+    async function play(index) {
+      const track = playlist().tracks[index];
+      if (!track) return;
+      current = index;
+      const blob = await loadFile(track.id);
+      if (!blob) return;
+      if (url) URL.revokeObjectURL(url);
+      url = URL.createObjectURL(blob);
+      const media = track.video ? video : audio;
+      video.hidden = !track.video;
+      audio.hidden = track.video;
+      document.querySelector("#art").hidden = track.video;
+      video.pause(); audio.pause();
+      media.src = url;
+      document.querySelector("#nowTitle").textContent = track.title;
+      await media.play();
+    }
+    function active() { return video.hidden ? audio : video; }
+    document.querySelector("#newPlaylist").onclick = () => {
+      const name = prompt("Playlist name", "New playlist");
+      if (!name) return;
+      library.push({ id: crypto.randomUUID(), name, tracks: [] });
+      selected = library.length - 1;
+      save(); paint();
+    };
+    document.querySelector("#fileInput").onchange = async (event) => {
+      for (const file of event.target.files) {
+        const id = crypto.randomUUID();
+        const videoFile = file.type.startsWith("video") || /\.(mp4|m4v|mov|mkv|webm)$/i.test(file.name);
+        await storeFile(id, file);
+        playlist().tracks.push({ id, title: file.name.replace(/\.[^.]+$/, ""), video: videoFile });
+      }
+      event.target.value = "";
+      save(); paint();
+    };
+    document.querySelector("#showPlaylist").onclick = () => { document.querySelector("#playlistPane").hidden = false; document.querySelector("#urlPane").hidden = true; };
+    document.querySelector("#showUrl").onclick = () => { document.querySelector("#playlistPane").hidden = true; document.querySelector("#urlPane").hidden = false; };
+    document.querySelector("#clearStatus").onclick = () => { document.querySelector("#downloadStatus").textContent = ""; document.querySelector("#downloadFill").style.width = "0"; };
+    document.querySelector("#play").onclick = () => { const media = active(); if (media.paused) media.play(); else media.pause(); };
+    document.querySelector("#prev").onclick = () => play(Math.max(0, current - 1));
+    document.querySelector("#next").onclick = () => play(Math.min(playlist().tracks.length - 1, current + 1));
+    setInterval(() => {
+      const media = active();
+      if (!media.duration) return;
+      const mins = Math.floor(media.currentTime / 60);
+      const secs = String(Math.floor(media.currentTime % 60)).padStart(2, "0");
+      document.querySelector("#nowTime").textContent = mins + ":" + secs;
+    }, 400);
+    document.querySelector("#startDownload").onclick = async () => {
+      const page = document.querySelector("#pageUrl").value.trim();
+      const status = document.querySelector("#downloadStatus");
+      const fill = document.querySelector("#downloadFill");
+      if (!/^https?:\/\//.test(page)) { status.textContent = "Enter a video URL"; return; }
+      if (/youtube\.com|youtu\.be/.test(page)) {
+        status.textContent = "YouTube signs this file. Use the Windows app for the full download, or the phone app for the direct file.";
+        fill.style.width = "0";
+        return;
+      }
+      status.textContent = "Starting · 0%";
+      fill.style.width = "0";
+      const response = await fetch(page);
+      if (!response.ok) { status.textContent = "The link returned " + response.status; return; }
+      const type = response.headers.get("content-type") || "";
+      if (type.startsWith("text/html")) { status.textContent = "That page is not a media file this browser can save."; return; }
+      const total = Number(response.headers.get("content-length")) || 0;
+      const reader = response.body.getReader();
+      const chunks = [];
+      let got = 0;
+      while (true) {
+        const part = await reader.read();
+        if (part.done) break;
+        chunks.push(part.value);
+        got += part.value.length;
+        const percent = total ? Math.round(got / total * 100) : 0;
+        status.textContent = total ? "Downloading · " + percent + "%" : "Downloading";
+        fill.style.width = (total ? percent : 8) + "%";
+      }
+      const blob = new Blob(chunks, { type });
+      const id = crypto.randomUUID();
+      const name = decodeURIComponent(page.split("?")[0].split("/").pop() || "Download");
+      await storeFile(id, blob);
+      playlist().tracks.push({ id, title: name.replace(/\.[^.]+$/, ""), video: type.startsWith("video") });
+      save(); paint();
+      status.textContent = "Saved · 100%";
+      fill.style.width = "100%";
+    };
+    paint();
+  </script>
+</body>
+</html>
