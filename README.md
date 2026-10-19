@@ -38,18 +38,21 @@ The phone apps are version 0.3.2.
 
 Open **Trim URL** from the title at the top left when you want to download. **Trim Playlist** in that same menu returns to the player.
 
-Choose one authentication method:
-
-- **Cookie file** uses a `.txt` cookie file.
-- **Extension account** connects with the browser extension.
-- **Platform account** signs in inside the Trim Playlist window.
-- **No authentication** is for a public video.
-
-To add a cookie file, choose **Create new**.
-
-- **Manual .txt** asks for a name. You then type the cookie text, the same way you would in a text editor, and save it. The app stores that name as a `.txt` file and selects it.
-- **Import .txt file** takes a cookie `.txt` you already have and selects that file.
-
 On the phone, **Trim** saves a file cut from Start to End. **Full download** saves the whole file. Downloads are not added to a playlist on their own.
 
 Playlists, cookie files, and downloaded media stay on that computer or phone.
+
+## Authentication
+
+Trim URL asks you to choose one authentication method.
+
+**Cookie file.** Use a `.txt` cookie file. Choose **Create new**, then:
+
+- **Manual .txt** asks for a name. Type the cookie text into that file, the same way you would in a text editor, and save it. The app stores the name as a `.txt` file and selects it.
+- **Import .txt file** takes a cookie `.txt` you already have and selects that file.
+
+**Extension account.** This is only for the browser. Install [Trim Playlist Account Connector](https://chromewebstore.google.com/detail/trim-playlist-account-con/fiimgcmfjndfmhpfekbpomiilkdkbnam) from the Chrome Web Store, then choose **Connect with the extension**. The extension opens the platform in the browser and saves the session. The phone app does not use this extension.
+
+**Platform account.** Sign in inside the Trim Playlist window. On the phone, this is the sign-in page inside the app. It does not open a browser tab and it does not use the extension.
+
+**No authentication.** Use this for a public video that does not need a signed-in account.

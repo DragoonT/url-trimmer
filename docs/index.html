@@ -3,15 +3,105 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width,initial-scale=1">
-  <meta name="description" content="Trim Playlist is a local playlist and media utility.">
+  <meta name="description" content="Download Trim Playlist for Windows, Linux, Android, and iOS.">
   <title>Trim Playlist</title>
+  <link rel="icon" href="denia.ico" type="image/x-icon">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,560;9..144,680&family=Outfit:wght@400;560;680&display=swap" rel="stylesheet">
   <style>
-    :root{color-scheme:dark;--bg:#0e131c;--card:#171c25;--line:#293341;--muted:#a9b5c7;--blue:#91bdff}*{box-sizing:border-box}body{margin:0;background:radial-gradient(circle at 80% 0,#1b315e 0,transparent 34rem),var(--bg);color:#eef2f8;font:16px/1.6 system-ui,-apple-system,Segoe UI,sans-serif}main{max-width:900px;margin:0 auto;padding:72px 24px}nav{display:flex;justify-content:space-between;align-items:center;margin-bottom:82px}.brand{font-weight:750;font-size:1.1rem}.mark{color:#76aaff;font-size:1.5rem;margin-right:.35rem}a{color:var(--blue)}.hero{max-width:700px}.tag{color:#a9cbff;text-transform:uppercase;letter-spacing:.12em;font-size:.8rem;font-weight:700}h1{font-size:clamp(2.5rem,8vw,5.2rem);line-height:1.02;letter-spacing:-.055em;margin:.5rem 0 1.25rem}.lead{font-size:1.2rem;color:var(--muted);max-width:620px}.actions{display:flex;gap:12px;flex-wrap:wrap;margin-top:30px}.button{display:inline-block;border:1px solid #4387ff;background:#2876ff;color:#fff;text-decoration:none;padding:11px 17px;border-radius:10px;font-weight:700}.button.secondary{background:transparent;border-color:#42516a;color:#dce8ff}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px;margin-top:74px}.card{background:rgba(23,28,37,.88);border:1px solid var(--line);border-radius:16px;padding:22px}.card h2{font-size:1.1rem;margin:0 0 8px}.card p{color:var(--muted);margin:0}footer{margin-top:80px;color:var(--muted);font-size:.9rem}
+    :root { color-scheme: light; --ink:#1c1915; --muted:#5e584f; --line:#e4dccf; --paper:#f6f1e8; --card:#fffdf8; --blue:#2463e8; --blue-ink:#fff; }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: radial-gradient(900px 420px at 100% -10%, #ffe7c2 0, transparent 60%), var(--paper); color: var(--ink); font: 17px/1.5 Outfit, sans-serif; }
+    a { color: inherit; }
+    main { max-width: 1040px; margin: 0 auto; padding: 28px 22px 72px; }
+    nav { display: flex; justify-content: space-between; align-items: center; gap: 16px; }
+    .brand { font-weight: 680; letter-spacing: -0.03em; text-decoration: none; }
+    .nav-links { display: flex; gap: 18px; color: var(--muted); font-size: 0.92rem; }
+    .nav-links a { text-decoration: none; }
+    .nav-links a:hover { color: var(--ink); }
+    header.hero { max-width: 760px; margin: 64px 0 32px; }
+    .kicker { margin: 0 0 12px; color: #9a4b12; font-size: 0.78rem; font-weight: 680; letter-spacing: 0.16em; text-transform: uppercase; }
+    h1 { margin: 0; font-family: Fraunces, serif; font-size: clamp(3.2rem, 7vw, 5.6rem); font-weight: 560; letter-spacing: -0.045em; line-height: 0.92; }
+    .lead { max-width: 38rem; margin: 18px 0 0; color: var(--muted); font-size: 1.12rem; }
+    .player-link { display: inline-block; margin-top: 16px; color: var(--blue); font-weight: 680; text-underline-offset: 4px; }
+    .shelf { display: grid; gap: 10px; }
+    .row { display: grid; grid-template-columns: 1fr auto; gap: 18px; align-items: center; padding: 18px 18px 16px; background: var(--card); border: 1px solid var(--line); border-radius: 18px; }
+    .row h2 { margin: 0; font-size: 1.15rem; letter-spacing: -0.03em; }
+    .row p { margin: 4px 0 0; color: var(--muted); font-size: 0.92rem; }
+    .file { display: inline-block; margin-top: 8px; color: #8a8174; font-size: 0.78rem; }
+    .get { display: inline-flex; align-items: center; justify-content: center; min-width: 148px; padding: 12px 16px; border-radius: 999px; background: var(--blue); color: var(--blue-ink); font-weight: 680; text-decoration: none; }
+    .get:hover { filter: brightness(1.08); }
+    .get:focus-visible, .player-link:focus-visible, .nav-links a:focus-visible { outline: 2px solid var(--blue); outline-offset: 3px; }
+    .note { margin: 28px 0 0; padding-top: 22px; border-top: 1px solid var(--line); color: var(--muted); font-size: 0.95rem; }
+    .note a { color: var(--blue); }
+    footer { margin-top: 36px; color: #8a8174; font-size: 0.86rem; }
+    footer a { color: inherit; }
+    @media (max-width: 800px) {
+      header.hero { margin-top: 36px; }
+      .row { grid-template-columns: 1fr; }
+      .get { justify-content: center; }
+    }
   </style>
 </head>
-<body><main>
-  <nav><div class="brand"><span class="mark">♫</span>Trim Playlist</div><a href="privacy.html">Privacy policy</a></nav>
-  <section class="hero"><div class="tag">Local playlists · your media</div><h1>Keep your playlist together.</h1><p class="lead">Trim Playlist keeps a playlist on your computer or phone. Download the app, or open the same Windows player in the browser.</p><div class="actions"><a class="button" href="downloads/TrimPlaylist-Android.apk">Download Android</a><a class="button secondary" href="downloads/TrimPlaylist-iOS.ipa">Download iOS</a><a class="button secondary" href="player/index.html">Enter the player</a></div></section>
-  <section class="grid"><article class="card"><h2>Desktop</h2><p>The Windows app plays your files and runs Trim URL with the full downloader.</p></article><article class="card"><h2>Phone</h2><p>The Android and iOS apps keep the playlist on the phone.</p></article><article class="card"><h2>Web</h2><p>Enter the player to open the same Windows screen in the browser.</p></article></section>
+<body>
+<main>
+  <nav>
+    <a class="brand" href="./">♫ Trim Playlist</a>
+    <div class="nav-links"><a href="privacy.html">Privacy policy</a><a href="https://github.com/DragoonT/url-trimmer">GitHub</a></div>
+  </nav>
+  <header class="hero">
+    <div>
+      <p class="kicker">Playlists on your computer and phone</p>
+      <h1>Pick the download for your system.</h1>
+    </div>
+    <p class="lead">Trim Playlist plays your files and can download or trim a video URL. Choose the package for your system, or open the same screen in the browser.</p>
+    <a class="player-link" href="player/index.html">Enter the player</a>
+  </header>
+  <section class="shelf" aria-label="Downloads">
+    <article class="row">
+      <div>
+        <h2>Windows installer</h2>
+        <p>Run the setup file, then open Trim Playlist from the Start menu. You can add a desktop shortcut during setup.</p>
+        <span class="file">TrimPlaylist-Setup.exe</span>
+      </div>
+      <a class="get" href="downloads/TrimPlaylist-Setup.exe">Download .exe</a>
+    </article>
+    <article class="row">
+      <div>
+        <h2>Linux</h2>
+        <p>Unzip the folder and run <code>start.sh</code>. On Debian or Ubuntu, install <code>libgtk-3-0</code> and <code>libwebkit2gtk-4.1-0</code> first.</p>
+        <span class="file">TrimPlaylist-Linux.zip</span>
+      </div>
+      <a class="get" href="downloads/TrimPlaylist-Linux.zip">Download Linux</a>
+    </article>
+    <article class="row">
+      <div>
+        <h2>Android 0.3.2</h2>
+        <p>Install the APK on the phone. Trim cuts a download from Start to End, and cookie files are created in the app.</p>
+        <span class="file">TrimPlaylist-Android.apk</span>
+      </div>
+      <a class="get" href="downloads/TrimPlaylist-Android.apk">Download APK</a>
+    </article>
+    <article class="row">
+      <div>
+        <h2>iPhone and iPad 0.3.2</h2>
+        <p>Install the IPA with your Apple ID. The phone app keeps playlists, trim, and cookie files on the device.</p>
+        <span class="file">Trim Playlist.ipa</span>
+      </div>
+      <a class="get" href="downloads/TrimPlaylist-iOS.ipa">Download IPA</a>
+    </article>
+    <article class="row">
+      <div>
+        <h2>macOS and NixOS</h2>
+        <p>On a Mac, install Python 3 and run <code>start-macos.command</code>. On NixOS, run <code>nix develop</code>, then <code>python trim_playlist_app.py</code>.</p>
+        <span class="file">TrimPlaylist-Other-OS.zip</span>
+      </div>
+      <a class="get" href="downloads/TrimPlaylist-Other-OS.zip">Download zip</a>
+    </article>
+  </section>
+  <p class="note">In Trim URL, authentication is Cookie file, Extension account, Platform account, or No authentication. Extension account is the browser connection: install <a href="https://chromewebstore.google.com/detail/trim-playlist-account-con/fiimgcmfjndfmhpfekbpomiilkdkbnam">Trim Playlist Account Connector</a>, then choose Connect with the extension. Platform account signs in inside the app window.</p>
   <footer>© 2026 DragoonT · <a href="privacy.html">Privacy</a> · <a href="https://github.com/DragoonT/url-trimmer">GitHub</a></footer>
-</main></body></html>
+</main>
+</body>
+</html>
