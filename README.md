@@ -6,7 +6,7 @@
 
 Trim Playlist keeps a playlist and can download or trim a video URL. You do that in the app: the Windows window, the same screen in a browser, or the Android and iOS apps.
 
-What changed in this build is in the [release note](RELEASE.md).
+What changed in this build is in the [release note](https://github.com/DragoonT/url-trimmer/releases/tag/v0.3.2).
 
 ## Download this build
 
