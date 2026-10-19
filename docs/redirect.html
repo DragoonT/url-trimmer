@@ -1,0 +1,5 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Returning to Trim Playlist</title><style>body{margin:0;display:grid;min-height:100vh;place-items:center;background:#0e131c;color:#eef2f8;font:16px/1.6 system-ui,sans-serif}main{max-width:540px;padding:32px;text-align:center}h1{font-size:1.7rem}p{color:#a9b5c7}a{color:#91bdff}</style></head>
+<body><main><h1>Returning to Trim Playlist…</h1><p id="message">Opening the installed app to finish the connection.</p><p><a id="open" href="#">Open Trim Playlist</a></p><noscript><p>JavaScript is required to finish the return to the app.</p></noscript></main>
+<script>(() => {const query=location.search||'';const hash=location.hash||'';// Fixed app target: never redirects to a URL supplied by a request.
+const target='trimplaylist://auth/callback'+query+hash;document.getElementById('open').href=target;setTimeout(()=>location.replace(target),250);})();</script></body></html>
