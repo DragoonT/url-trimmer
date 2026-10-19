@@ -10,6 +10,7 @@ import {
 import { initSortableList } from "./dnd.js";
 import { icon, setIcon, mountIcons } from "./icons.js";
 import { addCreateCookieButton } from "./cookies.js";
+import { exampleResponse, usesExample } from "./example.js";
 
 const state = {
   playlists: [],
@@ -265,15 +266,23 @@ function sessionPayload() {
 }
 
 function pushSessionToServer(payload) {
-  return fetch("/api/session", {
-    method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-    keepalive: true,
-  }).then((res) => {
-    if (!res.ok) throw new Error("Session save failed");
-    lastSessionSaveAt = Date.now();
-    return res.json();
+  const body = JSON.stringify(payload);
+  return usesExample().then((example) => {
+    if (example) {
+      exampleResponse("/api/session", { method: "PUT", body });
+      lastSessionSaveAt = Date.now();
+      return payload;
+    }
+    return fetch("/api/session", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body,
+      keepalive: true,
+    }).then((res) => {
+      if (!res.ok) throw new Error("Session save failed");
+      lastSessionSaveAt = Date.now();
+      return res.json();
+    });
   });
 }
 
@@ -291,6 +300,7 @@ async function loadSession() {
 }
 
 async function migrateLocalSession(serverSession) {
+  if (await usesExample()) return serverSession;
   if (serverSession?.playlistId || serverSession?.trackId) {
     return serverSession;
   }
@@ -299,7 +309,7 @@ async function migrateLocalSession(serverSession) {
     if (!raw) return serverSession;
     const local = JSON.parse(raw);
     if (!local.playlistId && !local.trackId) return serverSession;
-    return pushSessionToServer({
+    return await pushSessionToServer({
       ...local,
       volume: Number(localStorage.getItem("volume") || state.volume),
       videoQuality: localStorage.getItem("videoQuality") || state.videoQuality,
@@ -366,6 +376,7 @@ async function resumeFromSharedSession() {
 }
 
 async function api(url, options = {}) {
+  if (await usesExample()) return exampleResponse(url, options);
   const res = await fetch(url, options);
   const data = await res.json().catch(() => ({}));
   if (!res.ok) throw new Error(data.error || "Request failed");
@@ -1001,6 +1012,10 @@ updatePlayButton(false);
 updateVolumeUI(state.volume);
 
 async function bootstrap() {
+  if (await usesExample()) {
+    const note = document.querySelector(".brand .muted");
+    if (note) note.textContent = "Example player";
+  }
   let session = await loadSession();
   session = await migrateLocalSession(session);
   lastSessionSaveAt = Number(session?.savedAt) || 0;

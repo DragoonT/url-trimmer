@@ -1,5 +1,6 @@
 import {showToast, initDropdown} from './ui.js';
 import {addCreateCookieButton} from './cookies.js';
+import {exampleHome, exampleResponse, usesExample} from './example.js';
 import {icon} from './icons.js';
 const panel=document.createElement('div');
 panel.className='download-view';panel.hidden=true;
@@ -42,13 +43,17 @@ function refreshCookies(){
  if(cookieRequest)return cookieRequest;
  cookieStatus.textContent='Reading cookies folder…';
  cookieRequest=(async()=>{try{
-  const response=await fetch('/api/cookies',{cache:'no-store'});
-  if(!response.ok)throw Error('Cookies request failed (HTTP '+response.status+')');
-  const names=await response.json();
+  let names;
+  if(await usesExample()) names=exampleResponse('/api/cookies');
+  else {
+   const response=await fetch('/api/cookies',{cache:'no-store'});
+   if(!response.ok)throw Error('Cookies request failed (HTTP '+response.status+')');
+   names=await response.json();
+  }
   if(!Array.isArray(names)||names.some(n=>typeof n!=='string'))throw Error('Invalid cookies response');
   if(!names.includes(form.elements.cookies.value))form.elements.cookies.value='';
   cookies.fill([['','No cookies'],...names.map(n=>[n,n])]);
-  cookieStatus.textContent=names.length?names.length+' cookie files found':'No .txt files found in the server’s cookies folder.';
+  cookieStatus.textContent=names.length?names.length+' cookie files found':(await usesExample()?'No cookie files yet. Create one with Manual .txt or Import .txt file.':'No .txt files found in the server’s cookies folder.');
  }catch(e){cookieStatus.textContent=e.message;showToast(e.message,'error');}
  finally{cookieRequest=null;}})();
  return cookieRequest;
@@ -58,6 +63,8 @@ refreshCookies();
 addCreateCookieButton(panel.querySelector('#authCookie'), async name=>{form.elements.cookies.value=name;await refreshCookies();cookies.syncLabel();});
 
 const app=document.querySelector('.app'),menu=document.querySelector('#appMenu'),switchButton=document.querySelector('#appSwitch');
+const websiteHome=document.querySelector('#websiteHome');
+if(websiteHome) websiteHome.href=exampleHome();
 function selectView(view){const url=view==='url';app.classList.toggle('url-view',url);panel.hidden=!url;if(url)refreshCookies();document.querySelector('#appTitle').textContent=url?'Trim URL':'Trim Playlist';document.title=url?'Trim URL':'Trim Playlist';menu.hidden=true;switchButton.setAttribute('aria-expanded','false');}
 switchButton.onclick=()=>{menu.hidden=!menu.hidden;switchButton.setAttribute('aria-expanded',String(!menu.hidden));};
 menu.querySelectorAll('[data-view]').forEach(button=>button.onclick=()=>selectView(button.dataset.view));
@@ -128,6 +135,7 @@ function saveDownloadDraft(){
  if(!draftReady&&!draftTouched)return;
  const body=JSON.stringify({trimUrlForm:downloadDraft()});
  draftWrites=draftWrites.catch(()=>{}).then(async()=>{
+  if(await usesExample()){exampleResponse('/api/session',{method:'PUT',body});return;}
   const response=await fetch('/api/session',{method:'PUT',headers:{'Content-Type':'application/json'},body,keepalive:true});
   if(!response.ok)throw Error('Could not save Trim URL fields');
  });
@@ -141,9 +149,13 @@ window.addEventListener('pagehide',saveDownloadDraft);
 document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='hidden')saveDownloadDraft();});
 (async()=>{
  try{
-  const response=await fetch('/api/session',{cache:'no-store'});
-  if(!response.ok)throw Error('Could not restore Trim URL fields');
-  const saved=(await response.json()).trimUrlForm;
+  let saved;
+  if(await usesExample()) saved=exampleResponse('/api/session').trimUrlForm;
+  else {
+   const response=await fetch('/api/session',{cache:'no-store'});
+   if(!response.ok)throw Error('Could not restore Trim URL fields');
+   saved=(await response.json()).trimUrlForm;
+  }
   if(saved&&!draftTouched){
    for(const [name,value] of Object.entries(saved)){
     const input=form.elements.namedItem(name);

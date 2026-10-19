@@ -10,14 +10,14 @@ What changed in this build is in the [release note](RELEASE.md).
 
 ## Download this build
 
-The files are in the `dist/TrimPlaylist` folder.
+The same files are on the [Trim Playlist website](https://dragoont.github.io/url-trimmer/).
 
 | File | Who it is for | How to open it |
 |------|----------------|----------------|
-| `TrimPlaylist-Windows.zip` | Windows | Unzip it. Open **Trim Playlist** inside the `TrimPlaylist` folder. |
-| `TrimPlaylist-Setup.exe` | Windows | Run the installer. Open **Trim Playlist** from the Start menu. You can also add a desktop shortcut during setup. |
-| `TrimPlaylist-Linux.zip` | Linux | Unzip it. Run `start.sh` inside the `TrimPlaylist` folder. |
-| `TrimPlaylist-Other-OS.zip` | macOS and NixOS | Unzip it, then follow the system notes below. |
+| [TrimPlaylist-Windows.zip](https://dragoont.github.io/url-trimmer/downloads/TrimPlaylist-Windows.zip) | Windows | Unzip it. Open **Trim Playlist** inside the `TrimPlaylist` folder. |
+| [TrimPlaylist-Setup.exe](https://dragoont.github.io/url-trimmer/downloads/TrimPlaylist-Setup.exe) | Windows | Run the installer. Open **Trim Playlist** from the Start menu. You can also add a desktop shortcut during setup. |
+| [TrimPlaylist-Linux.zip](https://dragoont.github.io/url-trimmer/downloads/TrimPlaylist-Linux.zip) | Linux | Unzip it. Run `start.sh` inside the `TrimPlaylist` folder. |
+| [TrimPlaylist-Other-OS.zip](https://dragoont.github.io/url-trimmer/downloads/TrimPlaylist-Other-OS.zip) | macOS and NixOS | Unzip it, then follow the system notes below. |
 
 The Windows zip and the installer already include what the app needs. You do not install Python yourself for those two files.
 
@@ -31,8 +31,8 @@ On NixOS, unzip `TrimPlaylist-Other-OS.zip`, run `nix develop`, then run `python
 
 The phone apps are version 0.3.2.
 
-- Android: install `Android/dist/TrimPlaylist-Android.apk`. Building it is described in the [Android](Android/README.md) page.
-- iPhone: install `iOS/dist/Trim Playlist.ipa`. Building and installing it is described in the [iOS](iOS/README.md) page.
+- Android: install [TrimPlaylist-Android.apk](https://dragoont.github.io/url-trimmer/downloads/TrimPlaylist-Android.apk). Building it is described in the [Android](Android/README.md) page.
+- iPhone: install [TrimPlaylist-iOS.ipa](https://dragoont.github.io/url-trimmer/downloads/TrimPlaylist-iOS.ipa). Building and installing it is described in the [iOS](iOS/README.md) page.
 
 ## In the app
 

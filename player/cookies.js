@@ -1,3 +1,4 @@
+import { exampleResponse, usesExample } from "./example.js";
 import { icon } from "./icons.js";
 import { showToast } from "./ui.js";
 
@@ -30,6 +31,7 @@ function chooseKind() {
       <div class="modal card" role="dialog" aria-modal="true">
         <div class="modal-head"><h3>Create cookie file</h3><button type="button" class="modal-close" aria-label="Close">${icon("x")}</button></div>
         <div class="modal-body cookie-choices">
+          <p class="muted modal-msg">Choose how to add the cookie file.</p>
           <button type="button" class="btn btn-outline" data-kind="manual">Manual .txt</button>
           <button type="button" class="btn btn-outline" data-kind="import">Import .txt file</button>
         </div>
@@ -104,6 +106,7 @@ function pickFile() {
 }
 
 async function saveCookie(name, text) {
+  if (await usesExample()) return exampleResponse("/api/cookies", { method: "POST", body: JSON.stringify({ name, text }) }).name;
   const response = await fetch("/api/cookies", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
@@ -112,6 +115,22 @@ async function saveCookie(name, text) {
   const body = await response.json().catch(() => ({}));
   if (!response.ok) throw Error(body.error || "Could not save the cookie file");
   return body.name;
+}
+
+async function openCookie(filename) {
+  if (await usesExample()) {
+    try {
+      return exampleResponse(`/api/cookies/${encodeURIComponent(filename)}`).text;
+    } catch (error) {
+      if (error.status === 404) return null;
+      throw error;
+    }
+  }
+  const existing = await fetch(`/api/cookies/${encodeURIComponent(filename)}`, { cache: "no-store" });
+  if (existing.ok) return (await existing.json()).text ?? HEADER;
+  const body = await existing.json().catch(() => ({}));
+  if (existing.status === 404 && body.error === "Cookies file not found") return null;
+  throw Error(body.error || "Could not open the cookie file");
 }
 
 export async function createCookieFile() {
@@ -129,14 +148,7 @@ export async function createCookieFile() {
     const named = await askName();
     if (named == null) return null;
     const filename = tidyName(named);
-    let text = HEADER;
-    const existing = await fetch(`/api/cookies/${encodeURIComponent(filename)}`, { cache: "no-store" });
-    if (existing.ok) text = (await existing.json()).text ?? HEADER;
-    else {
-      const body = await existing.json().catch(() => ({}));
-      if (!(existing.status === 404 && body.error === "Cookies file not found")) throw Error(body.error || "Could not open the cookie file");
-    }
-    const edited = await editText(filename, text);
+    const edited = await editText(filename, (await openCookie(filename)) ?? HEADER);
     if (edited == null) return null;
     const name = await saveCookie(filename, edited);
     showToast(`Saved ${name}`, "success");

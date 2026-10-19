@@ -1179,7 +1179,7 @@ body {
 .app-switch { position:relative; }
 #appSwitch { padding:4px 0; font-size:1.1rem; text-align:left; }
 .app-menu { position:absolute; top:100%; left:0; min-width:170px; padding:6px; background:var(--card); border:1px solid var(--border); border-radius:12px; z-index:100; box-shadow:var(--shadow-md); }
-.app-menu button { display:flex; width:100%; justify-content:flex-start; }
+.app-menu button, .app-menu a { display:flex; width:100%; justify-content:flex-start; text-decoration:none; }
 .app-menu[hidden], .download-view[hidden] { display:none!important; }
 .download-view { grid-column:2 / -1; grid-row:1; overflow:auto; padding:28px; }
 .download-form { max-width:760px; margin:auto; }
@@ -1218,7 +1218,10 @@ body {
 .account-list { display:grid; gap:6px; margin-top:8px; }
 .account-row { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:8px; border:1px solid var(--border); border-radius:8px; font-size:.82rem; }
 .cookie-create { width:100%; margin-top:8px; }
-.cookie-choices { display:grid; gap:8px; }
+.cookie-choices { display:flex; flex-direction:column; gap:8px; }
+.cookie-choices .btn { display:flex; width:100%; min-height:48px; justify-content:flex-start; }
+.modal-overlay .cookie-editor-modal,
+.modal-overlay .modal { height:auto; max-height:calc(100vh - 32px); overflow:auto; }
 .cookie-editor-modal { max-width:640px; }
 .cookie-text { height:280px; min-height:180px; resize:vertical; font-family:Consolas,ui-monospace,monospace; line-height:1.45; white-space:pre; }
 
