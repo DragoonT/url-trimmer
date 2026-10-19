@@ -13,6 +13,7 @@ dist/
 Android/.gradle/
 Android/app/build/
 Android/dist/
+Android/local.properties
 iOS/dist/
 # Atomic cookie writes may be left behind after an interrupted process
 cookies/*.tmp

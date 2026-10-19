@@ -1,4 +1,5 @@
 import {showToast, initDropdown} from './ui.js';
+import {addCreateCookieButton} from './cookies.js';
 import {icon} from './icons.js';
 const panel=document.createElement('div');
 panel.className='download-view';panel.hidden=true;
@@ -54,6 +55,7 @@ function refreshCookies(){
 }
 cookies.trigger.addEventListener('click',refreshCookies);
 refreshCookies();
+addCreateCookieButton(panel.querySelector('#authCookie'), async name=>{form.elements.cookies.value=name;await refreshCookies();cookies.syncLabel();});
 
 const app=document.querySelector('.app'),menu=document.querySelector('#appMenu'),switchButton=document.querySelector('#appSwitch');
 function selectView(view){const url=view==='url';app.classList.toggle('url-view',url);panel.hidden=!url;if(url)refreshCookies();document.querySelector('#appTitle').textContent=url?'Trim URL':'Trim Playlist';document.title=url?'Trim URL':'Trim Playlist';menu.hidden=true;switchButton.setAttribute('aria-expanded','false');}

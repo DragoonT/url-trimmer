@@ -30,6 +30,58 @@ PLAYER_DIR = resource_dir() / "player"
 PLAYLISTS_DIR = SCRIPT_DIR / "playlists"
 SESSION_FILE = SCRIPT_DIR / "player-session.json"
 MEDIA_EXTENSIONS = {".mp3", ".mp4", ".m4a", ".webm", ".ogg", ".wav", ".flac", ".mkv"}
+COOKIE_TEXT_LIMIT = 2_000_000
+_COOKIE_RESERVED = {
+    "con", "prn", "aux", "nul", "readme",
+    *(f"com{i}" for i in range(1, 10)),
+    *(f"lpt{i}" for i in range(1, 10)),
+}
+
+
+def cookie_filename(name: object) -> str:
+    raw = (name if isinstance(name, str) else "").strip()
+    if "/" in raw or "\\" in raw:
+        raise ValueError("Use a simple cookie file name")
+    leaf = raw
+    stem = leaf[:-4] if leaf.lower().endswith(".txt") else leaf
+    stem = stem.strip() or "cookies"
+    if (
+        len(stem) > 80
+        or stem.lower() in _COOKIE_RESERVED
+        or stem.endswith((" ", "."))
+        or any(ord(char) < 32 or char in '<>:"|?*' for char in stem)
+    ):
+        raise ValueError("Use a simple cookie file name")
+    return stem + ".txt"
+
+
+def cookie_file(folder: Path, name: object) -> Path:
+    filename = cookie_filename(name)
+    folder = folder.resolve()
+    path = (folder / filename).resolve()
+    if path.parent != folder:
+        raise ValueError("Use a simple cookie file name")
+    return path
+
+
+def save_cookie_text(folder: Path, name: object, text: object) -> str:
+    if not isinstance(text, str):
+        raise ValueError("Cookie file must be text")
+    if len(text.encode("utf-8")) > COOKIE_TEXT_LIMIT:
+        raise ValueError("Cookie file is too large")
+    path = cookie_file(folder, name)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_name(path.name + ".writing")
+    temporary.write_text(text, encoding="utf-8", newline="\n")
+    temporary.replace(path)
+    return path.name
+
+
+def read_cookie_text(folder: Path, name: object) -> str:
+    path = cookie_file(folder, name)
+    if not path.is_file():
+        raise ValueError("Cookies file not found")
+    return path.read_text(encoding="utf-8")
 
 DEFAULT_PLAYER_SESSION = {
     "playlistId": None,
@@ -276,6 +328,13 @@ class PlaylistHandler(SimpleHTTPRequestHandler):
             names = sorted(p.name for p in folder.glob("*.txt") if p.is_file() and p.name.lower() != "readme.txt")
             self.send_json(names)
             return
+        if path.startswith("/api/cookies/"):
+            try:
+                name = unquote(path.rsplit("/", 1)[-1])
+                self.send_json({"name": cookie_filename(name), "text": read_cookie_text(SCRIPT_DIR / "cookies", name)})
+            except ValueError as exc:
+                self.send_json({"error": str(exc)}, 404)
+            return
         if path.startswith("/api/downloads/"):
             self.send_json(get_job(path.split("/")[-1]))
             return
@@ -339,6 +398,22 @@ class PlaylistHandler(SimpleHTTPRequestHandler):
                 self.send_json(result)
             except (ValueError, TypeError) as exc:
                 self.send_json({'error': str(exc)}, 400)
+            return
+
+        if path == "/api/cookies":
+            length = int(self.headers.get("Content-Length", "0"))
+            if length < 0 or length > COOKIE_TEXT_LIMIT + 100_000:
+                self.send_json({"error": "Cookie file is too large"}, 400)
+                return
+            data = self.read_json()
+            if not isinstance(data, dict):
+                self.send_json({"error": "Cookie file must be text"}, 400)
+                return
+            try:
+                name = save_cookie_text(SCRIPT_DIR / "cookies", data.get("name"), data.get("text"))
+                self.send_json({"name": name})
+            except (ValueError, TypeError, OSError) as exc:
+                self.send_json({"error": str(exc)}, 400)
             return
 
         if path == "/api/downloads/preview":

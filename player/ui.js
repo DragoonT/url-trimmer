@@ -315,11 +315,12 @@ export function createChoiceDropdown(host, choices, initial, onChange) {
   const trigger=document.createElement('button');trigger.type='button';trigger.className='input dropdown-trigger';trigger.setAttribute('aria-expanded','false');trigger.setAttribute('aria-haspopup','listbox');
   const label=document.createElement('span');trigger.append(label);trigger.insertAdjacentHTML('beforeend',icon('chevron-down'));
   const menu=document.createElement('div');menu.className='dropdown-menu';menu.setAttribute('role','listbox');host.append(trigger,menu);
-  let value=initial;
-  function fill(options){menu.replaceChildren();if(!options.some(([key])=>key===value))value=options[0]?.[0]||'';for(const [key,text] of options){const button=document.createElement('button');button.type='button';button.className='dropdown-item';button.dataset.value=key;button.textContent=text;button.setAttribute('role','option');menu.append(button);}label.textContent=options.find(([key])=>key===value)?.[1]||'';}
+  let value=initial, options=choices;
+  function fill(next){options=next;menu.replaceChildren();if(!options.some(([key])=>key===value))value=options[0]?.[0]||'';for(const [key,text] of options){const button=document.createElement('button');button.type='button';button.className='dropdown-item';button.dataset.value=key;button.textContent=text;button.setAttribute('role','option');menu.append(button);}label.textContent=options.find(([key])=>key===value)?.[1]||'';}
+  function select(next){value=next;label.textContent=options.find(([key])=>key===value)?.[1]||'';}
   fill(choices);
   initDropdown({root:host,trigger,menu,onSelect:(key,text)=>{value=key;label.textContent=text;onChange?.(key);}});
   trigger.addEventListener('keydown',event=>{if(event.key==='ArrowDown'){event.preventDefault();menu.classList.add('open');trigger.setAttribute('aria-expanded','true');menu.querySelector('button')?.focus();}});
   menu.addEventListener('keydown',event=>{const buttons=[...menu.children];const index=buttons.indexOf(document.activeElement);if(event.key==='ArrowDown'||event.key==='ArrowUp'){event.preventDefault();buttons[(index+(event.key==='ArrowDown'?1:-1)+buttons.length)%buttons.length]?.focus();}if(event.key==='Escape'){menu.classList.remove('open');trigger.setAttribute('aria-expanded','false');trigger.focus();}});
-  return {get value(){return value;},fill,trigger};
+  return {get value(){return value;},select,fill,trigger};
 }

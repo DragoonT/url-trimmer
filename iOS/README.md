@@ -1,12 +1,14 @@
 # Trim Playlist for iOS
 
-This is the on-device Trim Playlist player. It keeps playlists on the iPhone, plays audio and video you choose from Files, and plays a direct media link. YouTube and Facebook downloads, trimming, and cookie files stay in the Windows app. The phone app does not embed Python, yt-dlp, or FFmpeg.
+This is the Trim Playlist app for iPhone and iPad, version 0.3.2. Playlists, downloads, trim, and cookie files stay on the device. The app does not embed Python, yt-dlp, or FFmpeg.
 
 ## What you can do
 
 - Create, rename, and delete playlists.
 - Choose one or more audio or video files. Trim Playlist copies them into the app so they keep playing.
 - Paste a direct `http` or `https` link. Turn on Video when the link is a video file.
+- Download a video or playlist. Full download saves the whole file. Trim saves a file cut from Start to End. A download is not added to a playlist on its own.
+- Add a cookie file with **Create new**. **Manual .txt** asks for a name and then you type the cookies. **Import .txt file** uses a `.txt` you already have. Platform account signs in inside the app.
 - Tap a track to play it. Pause, seek, skip, shuffle, repeat one track, or repeat the playlist.
 - Move tracks up or down, or remove them from the playlist.
 
@@ -18,7 +20,7 @@ Playback can continue while the phone is locked. Removing a track deletes the co
 2. Run the build script, passing the path to `ipabuilder-cli.exe`:
 
    ```powershell
-   .\build-ipa.ps1 -BuilderCli C:\Users\rtodsan\Downloads\test2\tools\WindowsIPABuilder\ipabuilder-cli.exe
+   .\build-ipa.ps1 -BuilderCli C:\path\to\ipabuilder-cli.exe
    ```
 
 3. Import `dist/Trim Playlist.ipa` using [iLoader](https://github.com/DragoonT/iloader). iLoader can sign and install the IPA with your Apple ID.

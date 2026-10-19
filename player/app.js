@@ -9,6 +9,7 @@ import {
 } from "./ui.js";
 import { initSortableList } from "./dnd.js";
 import { icon, setIcon, mountIcons } from "./icons.js";
+import { addCreateCookieButton } from "./cookies.js";
 
 const state = {
   playlists: [],
@@ -86,6 +87,7 @@ const onlineSelectionChoice=createChoiceDropdown(document.querySelector('#online
 const onlineUrl=document.querySelector('#onlineTrackUrl');onlineUrl.addEventListener('input',clearOnlinePreview);
 async function refreshOnlineCookies(){try{const names=await api('/api/cookies');onlineCookieChoice.fill([['','No cookies'],...names.map(name=>[name,name])]);}catch(error){showToast(error.message,'error');}}
 onlineCookieChoice.trigger.addEventListener('click',refreshOnlineCookies);refreshOnlineCookies();
+addCreateCookieButton(document.querySelector('#onlineTrackCookies'), async name=>{onlineCookieChoice.select(name);clearOnlinePreview();await refreshOnlineCookies();});
 function renderOnlineChoices(){
  const list=document.querySelector('#onlineTrackChoices');list.replaceChildren();onlineSelection.clear();
  if(!onlinePreview)return;

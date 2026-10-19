@@ -10,7 +10,7 @@ from zipfile import ZIP_DEFLATED, ZipFile
 ROOT = Path(__file__).resolve().parent.parent
 DEFAULT_OUTPUT = ROOT / "dist" / "portable" / "TrimPlaylist-portable-source.zip"
 SKIP_PARTS = {".agents", ".git", ".gradle", "__pycache__", "build", "dist", "output", "playlists"}
-SKIP_NAMES = {"setlist.json", "player-session.json"}
+SKIP_NAMES = {"setlist.json", "player-session.json", "local.properties"}
 PRIVATE_SUFFIXES = {".pyc", ".pyo", ".tmp", ".log"}
 
 

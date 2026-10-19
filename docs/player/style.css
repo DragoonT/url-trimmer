@@ -1217,6 +1217,10 @@ body {
 .connection-page { max-width:640px; margin:40px auto; padding:24px; height:auto; }
 .account-list { display:grid; gap:6px; margin-top:8px; }
 .account-row { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:8px; border:1px solid var(--border); border-radius:8px; font-size:.82rem; }
+.cookie-create { width:100%; margin-top:8px; }
+.cookie-choices { display:grid; gap:8px; }
+.cookie-editor-modal { max-width:640px; }
+.cookie-text { height:280px; min-height:180px; resize:vertical; font-family:Consolas,ui-monospace,monospace; line-height:1.45; white-space:pre; }
 
 .playlist-picker{margin:16px 0;padding:16px;border:1px solid var(--border,#293341);border-radius:14px}.playlist-picker-list{max-height:300px;overflow:auto;display:grid;gap:6px}.playlist-choice{display:flex;gap:12px;align-items:center;width:100%;padding:12px;text-align:left;color:inherit;background:transparent;border:1px solid #293341;border-radius:10px;cursor:pointer}.playlist-choice:disabled{opacity:.5;cursor:default}.choice-check{width:20px;height:20px;flex:none;border:1px solid #526077;border-radius:5px;display:grid;place-items:center}.choice-check svg{width:16px;height:16px;visibility:hidden}.playlist-choice[aria-checked="true"] .choice-check{background:#3276ff;border-color:#3276ff}.playlist-choice[aria-checked="true"] .choice-check svg{visibility:visible}.playlist-choice:focus-visible{outline:2px solid #3276ff;outline-offset:2px}
 
