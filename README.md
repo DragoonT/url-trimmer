@@ -1,6 +1,26 @@
-# URL Trimmer
+# Trim Playlist
 
-Download and trim videos from any supported URL into MP3 or MP4 files. Paste a link, set start/end times, and export tracks with names from your setlist.
+<p align="center">
+  <img src="store-assets/trim-playlist-1280x800.png" alt="Trim Playlist desktop player showing playlists, local tracks, and playback controls" width="960">
+</p>
+
+Trim Playlist is a desktop media player and URL downloader. Build playlists from local MP3/MP4 files, add supported online media, download a video or playlist, and trim downloads into named tracks.
+
+**Windows:** install [TrimPlaylist-Setup.exe](dist/installer/TrimPlaylist-Setup.exe). It adds a Start Menu entry and an optional desktop shortcut; Python is not required after installation.
+
+If Windows removes the unsigned executable, use the [portable source package](dist/portable/TrimPlaylist-portable-source.zip). Extract it, install Python 3.10 or newer, run `pip install -r requirements.txt`, then start `start-playlist.bat`.
+
+## Use Trim Playlist on Android or iPhone
+
+The Android APK and the iPhone IPA are the Trim Playlist player rebuilt for each phone. They are not the Windows `.exe`. Install [TrimPlaylist-Android.apk](Android/dist/TrimPlaylist-Android.apk) or build it from the [Android](Android/README.md) project in Android Studio. Build the iPhone app with [Windows IPA Builder](iOS/README.md) and install the IPA.
+
+On the phone you can create playlists, choose audio and video files on the device, paste a direct media link, reorder tracks, and play them with pause, next, previous, seek, shuffle, repeat, and volume. Playlists stay on that phone.
+
+YouTube and Facebook downloads, trimming, and cookie sign-in stay in the Windows app. Those need the local Python downloader. To open the full Windows player in a phone browser, connect the PC and phone to the same Wi-Fi and run `start-mobile-web.bat` on the PC. It displays an address such as `http://192.168.1.25:8765/`. Open that address in the phone browser.
+
+If Windows Firewall asks, allow Python on **Private** networks. Keep the launcher window open while using the phone browser. The browser connects to the local server; no media or playlist data is uploaded to GitHub Pages.
+
+For development, command-line downloads, and source builds, continue below.
 
 ## Supported URLs
 
@@ -257,7 +277,11 @@ python -m pip install --upgrade --pre "yt-dlp[default]"
 
 **Re-cut** — delete output files and run again. Delete `output/_cache_*` to re-download.
 
-## Trim Playlist (desktop app)
+## Trim Playlist desktop app
+
+<p align="center">
+  <img src="store-assets/trim-url-1280x800.png" alt="Trim URL screen for selecting online media and download settings" width="960">
+</p>
 
 Create your own playlists with custom names and pick files yourself:
 
@@ -266,6 +290,10 @@ python trim_playlist_app.py
 ```
 
 Or double-click **`start-playlist.bat`**. Opens in its **own app window** (not a browser tab).
+
+### Installers and other operating systems
+
+Windows users can install [TrimPlaylist-Setup.exe](dist/installer/TrimPlaylist-Setup.exe). Installer source and native build instructions are in [packaging/README.md](packaging/README.md). Linux and macOS builds must be made on Linux and macOS. Android and iOS need a dedicated mobile version because the current desktop downloader relies on local Python, yt-dlp, and FFmpeg.
 
 For browser mode with Python:
 
@@ -308,7 +336,7 @@ No need to run `python playlist_server.py` first. The server runs **inside** the
 
 If port `8765` is already in use (browser or another `.exe` open), the next free port is picked automatically (8766, 8767, …).
 
-**Data folders** (`playlists/`, `player-session.json`, `output/`, `cookies/`) live in the **`url-trimmer` project folder** — the same place the browser app uses. The `.exe` finds that folder automatically when it sits in `dist/TrimPlaylist/`.
+**Data folders** (`playlists/`, `player-session.json`, `output/`, `cookies/`) live beside the source when you run from this repository. The portable `.exe` does the same. The installed Windows app stores them in `%LOCALAPPDATA%\Trim Playlist` so it does not need write permission in Program Files. Set `TRIM_PLAYLIST_DIR` to use a different folder.
 
 You can copy the whole `dist/TrimPlaylist` or `dist/UrlTrimmer` folder to another PC — no Python install required. On another PC, data is stored next to the `.exe` unless you set `TRIM_PLAYLIST_DIR` to a custom folder.
 
@@ -337,3 +365,15 @@ Single video with a playlist URL opens an item picker before downloading. No ite
 Progress counts the selected files sequentially: selecting original playlist item 7 alone shows 1/1, and selecting two items shows 1/2 then 2/2.
 
 Authentication controls are mutually exclusive: Cookie file shows the cookie dropdown, Platform account shows only the selected platform and its connection status, and No authentication uses neither saved session.
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for local setup, validation, and contribution guidance.
+
+## Mobile workspaces
+
+The [Android](Android/README.md) and [iOS](iOS/README.md) apps are on-device players. They play files chosen on the phone and direct media links. They do not embed the desktop Python downloader or accept browser cookies. A future shared download service is described separately in [mobile-api.md](mobile-api.md).
+
+## License
+
+This project is licensed under the [MIT License](LICENSE).

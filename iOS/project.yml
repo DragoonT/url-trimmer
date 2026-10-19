@@ -1,0 +1,18 @@
+name: TrimPlaylist
+options:
+  bundleIdPrefix: com.dragoon
+targets:
+  TrimPlaylist:
+    type: application
+    platform: iOS
+    deploymentTarget: "16.0"
+    sources:
+      - path: Sources
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.dragoon.trimplaylist
+        PRODUCT_NAME: Trim Playlist
+        SWIFT_VERSION: "5.0"
+        TARGETED_DEVICE_FAMILY: "1,2"
+        INFOPLIST_KEY_CFBundleDisplayName: Trim Playlist
+        INFOPLIST_KEY_UIApplicationSceneManifest_Generation: YES

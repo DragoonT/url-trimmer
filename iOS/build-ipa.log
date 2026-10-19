@@ -1,0 +1,20 @@
+clang    : C:\Program Files\LLVM\bin\clang.exe (ok)
+ldid     : C:\Users\rtodsan\Downloads\test2\tools\WindowsIPABuilder\tools\ldid.exe (ok)
+sdk      : C:\Users\rtodsan\Downloads\test2\tools\WindowsIPABuilder\sdks\iPhoneOS16.5.sdk (ok)
+swiftc   : not found (optional - only needed for .swift sources) (not found)
+== compile: running ==
+[compile] compiling main.m
+== compile: done ==
+== link: running ==
+== link: done ==
+== sign: running ==
+[sign] ldid -S TrimPlaylist
+== sign: done ==
+== package: running ==
+[package] Payload/TrimPlaylist.app/AppIcon60x60@2x.png
+[package] Payload/TrimPlaylist.app/AppIcon60x60@3x.png
+[package] Payload/TrimPlaylist.app/Info.plist
+[package] Payload/TrimPlaylist.app/TrimPlaylist
+== package: done ==
+
+Built: C:\Users\rtodsan\Downloads\test2\url-trimmer\iOS\dist\Trim Playlist.ipa

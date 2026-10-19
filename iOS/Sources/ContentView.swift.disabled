@@ -1,0 +1,46 @@
+import SwiftUI
+
+struct ContentView: View {
+    @State private var serviceURL = ""
+    @State private var status = "Not connected"
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("Trim Playlist") {
+                    Text("Connect this mobile client to your Trim Playlist service. The service must use HTTPS.")
+                    TextField("https://playlist.example.com", text: $serviceURL)
+                        .textInputAutocapitalization(.never)
+                        .keyboardType(.URL)
+                        .autocorrectionDisabled()
+                    Button("Check connection") {
+                        checkConnection()
+                    }
+                    Text(status)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .navigationTitle("Trim Playlist")
+        }
+    }
+
+    private func checkConnection() {
+        let base = serviceURL.trimmingCharacters(in: .whitespacesAndNewlines).trimmingCharacters(in: CharacterSet(charactersIn: "/"))
+        guard base.hasPrefix("https://"), let url = URL(string: "\(base)/api/session") else {
+            status = "Use an HTTPS service URL."
+            return
+        }
+        status = "Checking connection…"
+        URLSession.shared.dataTask(with: url) { _, response, error in
+            DispatchQueue.main.async {
+                if let error {
+                    status = "Connection failed: \(error.localizedDescription)"
+                } else if let response = response as? HTTPURLResponse {
+                    status = "Connected (HTTP \(response.statusCode))"
+                } else {
+                    status = "Connection failed."
+                }
+            }
+        }.resume()
+    }
+}

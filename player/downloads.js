@@ -12,8 +12,8 @@ panel.innerHTML=`<form class="card download-form">
 <p class="muted" id="downloadPlaylist" hidden>Playlist downloads always use Full mode and each video’s original title.</p>
 <label class="field" id="downloadAudioQuality" hidden>MP3 quality<select class="input" name="audio_quality"><option value="best">Best quality (VBR)</option><option value="320">320 kbps</option><option value="256">256 kbps</option><option value="192">192 kbps</option><option value="128">128 kbps</option><option value="96">96 kbps</option><option value="64">64 kbps</option></select></label>
 <div id="downloadTrim" hidden><label class="field">Filename (optional)<input class="input" name="name" placeholder="Use original title"></label><label class="field">Start<input class="input" name="start" placeholder="0:00"></label><label class="field">End<input class="input" name="end" placeholder="3:30"></label></div>
-<label class="field">Authentication<select class="input" name="auth_source"><option value="cookie">Cookie file</option><option value="platform">Platform account</option><option value="none">No authentication</option></select></label>
-<div id="authPlatform" hidden><label class="field">Platform<select class="input" name="platform"><option value="youtube">YouTube</option><option value="facebook">Facebook</option><option value="instagram">Instagram</option><option value="x">X / Twitter</option><option value="tiktok">TikTok</option><option value="twitch">Twitch</option></select></label><div id="accountList" class="account-list"></div><a id="connectPlatform" class="btn btn-outline" target="_blank" rel="noopener noreferrer">Connect selected platform</a><p class="muted">The optional connector saves a browser session. Use a cookie file if the connector is not installed.</p></div>
+<label class="field">Authentication<select class="input" name="auth_source"><option value="cookie">Cookie file</option><option value="extension">Extension account</option><option value="platform">Platform account</option><option value="none">No authentication</option></select></label>
+<div id="authPlatform" hidden><label class="field">Platform<select class="input" name="platform"><option value="youtube">YouTube</option><option value="facebook">Facebook</option><option value="instagram">Instagram</option><option value="x">X / Twitter</option><option value="tiktok">TikTok</option><option value="twitch">Twitch</option></select></label><div id="accountList" class="account-list"></div><div id="extensionConnect"><a id="connectPlatform" class="btn btn-outline" target="_blank" rel="noopener noreferrer">Connect with the extension</a><p class="muted">Extension account is the browser connection. It uses Trim Playlist Account Connector and connects the same way as before.</p></div><div id="appSignInBox" hidden><button type="button" id="appSignIn" class="btn btn-outline">Sign in</button><p id="appSignInStatus" class="muted">Platform account signs in inside the Trim Playlist window, like the phone. It does not open a browser tab and it does not use the extension.</p></div></div>
 <label class="field" id="authCookie">Cookies<input type="hidden" name="cookies" value=""><div id="cookieSelect"></div></label><label class="field">Volume multiplier<input class="input" name="volume" type="number" min="0" max="10" step="0.1" value="1"><span class="muted">1 = original volume · 2 = boost</span></label>
 <p class="muted">Full downloads use each video's original title. Files save in output/; add them to your playlist using the file picker.</p>
 <section id="playlistPicker" class="playlist-picker" hidden aria-label="Choose playlist items"></section><button class="btn btn-primary" type="submit">Start download</button><div class="download-progress" role="progressbar" aria-valuemin="0" aria-valuemax="100"><div class="bg-brand-gradient"></div></div><p id="downloadStatus" role="status"></p>
@@ -163,16 +163,29 @@ document.addEventListener('visibilitychange',()=>{if(document.visibilityState===
 const accountList=panel.querySelector('#accountList'),connectLink=panel.querySelector('#connectPlatform');
 let accountPolling=false,connectingPlatform=null;const accountVersions=new Map();
 function updateAuthentication(){
- const platform=form.elements.auth_source.value==='platform';
- panel.querySelector('#authPlatform').hidden=!platform;panel.querySelector('#authCookie').hidden=form.elements.auth_source.value!=='cookie';
+ const source=form.elements.auth_source.value;
+ const account=source==='extension'||source==='platform';
+ panel.querySelector('#authPlatform').hidden=!account;
+ panel.querySelector('#extensionConnect').hidden=source!=='extension';
+ panel.querySelector('#appSignInBox').hidden=source!=='platform';
+ panel.querySelector('#authCookie').hidden=source!=='cookie';
  connectLink.href='/connect.html?platform='+encodeURIComponent(form.elements.platform.value);
- if(platform)refreshAccounts();
+ if(account)refreshAccounts();
 }
 form.elements.auth_source.onchange=updateAuthentication;
 form.elements.platform.onchange=()=>{accountList.replaceChildren();updateAuthentication();};
 connectLink.onclick=()=>{connectingPlatform={platform:form.elements.platform.value,previous:accountVersions.get(form.elements.platform.value)||0};};
+panel.querySelector('#appSignIn').onclick=async()=>{
+ const platform=form.elements.platform.value;
+ connectingPlatform={platform,previous:accountVersions.get(platform)||0};
+ const statusLine=panel.querySelector('#appSignInStatus');
+ if(!window.pywebview?.api?.sign_in){statusLine.textContent='Platform account signs in inside the Trim Playlist app window. In a browser, use Extension account.';return;}
+ statusLine.textContent='Opening sign-in in the app window…';
+ try{const result=await window.pywebview.api.sign_in(platform);if(result&&result.error)throw Error(result.error);}
+ catch(error){statusLine.textContent=error.message||'Could not open sign-in';}
+};
 async function refreshAccounts(){
- if(accountPolling||form.elements.auth_source.value!=='platform')return;accountPolling=true;
+ if(accountPolling||!['extension','platform'].includes(form.elements.auth_source.value))return;accountPolling=true;
  try{
   const r=await fetch('/api/accounts',{cache:'no-store'});if(!r.ok)throw Error('Could not load account connection');
   const accounts=await r.json();const account=accounts.find(a=>a.platform===form.elements.platform.value);accountList.replaceChildren();if(!account)return;

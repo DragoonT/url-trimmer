@@ -10,6 +10,10 @@ cookies/*.txt
 
 build/
 dist/
+Android/.gradle/
+Android/app/build/
+Android/dist/
+iOS/dist/
 # Atomic cookie writes may be left behind after an interrupted process
 cookies/*.tmp
 

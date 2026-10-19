@@ -11,11 +11,11 @@ jobs = {}
 lock = threading.Lock()
 
 def download_cookie_path(data):
-    if data.get('auth_source', 'cookie') not in ('cookie', 'platform', 'none'):
+    if data.get('auth_source', 'cookie') not in ('cookie', 'platform', 'extension', 'none'):
         raise ValueError('Choose a valid authentication method')
     if data.get('auth_source', 'cookie') == 'none':
         return None
-    if data.get('auth_source') == 'platform':
+    if data.get('auth_source') in ('platform', 'extension'):
         import account_connections
         platform = data.get('platform')
         path = account_connections.cookie_path(platform)

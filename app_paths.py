@@ -38,11 +38,19 @@ def app_dir() -> Path:
     if not is_frozen():
         return dev_root
 
-    project_root = find_project_root(Path(sys.executable).resolve().parent)
+    executable_dir = Path(sys.executable).resolve().parent
+    # Preserve portable builds that already keep their data next to the app.
+    # Installed apps must never try to write to Program Files.
+    project_root = find_project_root(executable_dir)
     if project_root is not None:
         return project_root
-
-    return Path(sys.executable).resolve().parent
+    if sys.platform == "win32":
+        base = Path(os.environ.get("LOCALAPPDATA", executable_dir))
+        return base / "Trim Playlist"
+    if sys.platform == "darwin":
+        return Path.home() / "Library" / "Application Support" / "Trim Playlist"
+    base = Path(os.environ.get("XDG_DATA_HOME", Path.home() / ".local" / "share"))
+    return base / "trim-playlist"
 
 
 def resource_dir() -> Path:

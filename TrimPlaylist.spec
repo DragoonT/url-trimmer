@@ -1,13 +1,17 @@
 # -*- mode: python ; coding: utf-8 -*-
 from pathlib import Path
+import sys
 
 from PyInstaller.utils.hooks import collect_data_files, collect_submodules
 
 ROOT = Path(SPECPATH)
+WINDOWS_ICON = ROOT / "denia.ico"
 import runpy
 runpy.run_path(str(ROOT / "package_extension.py"))["package_extension"](ROOT)
 
 datas = [(str(ROOT / "player"), "player")]
+if (ROOT / "denia.ico").is_file():
+    datas.append((str(ROOT / "denia.ico"), "."))
 datas += collect_data_files("imageio_ffmpeg")
 
 a = Analysis(
@@ -15,7 +19,7 @@ a = Analysis(
     pathex=[str(ROOT)],
     binaries=[],
     datas=datas,
-    hiddenimports=["imageio_ffmpeg", "webview", "clr"] + collect_submodules("yt_dlp"),
+    hiddenimports=["imageio_ffmpeg", "webview"] + (["clr"] if sys.platform == "win32" else []) + collect_submodules("yt_dlp"),
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
@@ -32,11 +36,11 @@ exe = EXE(
     [],
     exclude_binaries=True,
     name="TrimPlaylist",
-    icon=str(ROOT / "denia.jpg"),
+    icon=str(WINDOWS_ICON) if sys.platform == "win32" and WINDOWS_ICON.is_file() else None,
     debug=False,
     bootloader_ignore_signals=False,
     strip=False,
-    upx=True,
+    upx=False,
     console=False,
     disable_windowed_traceback=False,
     argv_emulation=False,
@@ -50,7 +54,7 @@ coll = COLLECT(
     a.binaries,
     a.datas,
     strip=False,
-    upx=True,
+    upx=False,
     upx_exclude=[],
     name="TrimPlaylist",
 )

@@ -293,6 +293,9 @@ class PlaylistHandler(SimpleHTTPRequestHandler):
                 return
             self.send_json(playlist)
             return
+        if path in ("/favicon.ico", "/denia.ico"):
+            self.serve_icon()
+            return
         if path == "/api/media":
             params = parse_qs(parsed.query)
             playlist_id = params.get("playlist", [""])[0]
@@ -301,6 +304,18 @@ class PlaylistHandler(SimpleHTTPRequestHandler):
             self.serve_item(playlist_id, item_id, quality)
             return
         super().do_GET()
+
+    def serve_icon(self) -> None:
+        icon = resource_dir() / "denia.ico"
+        if not icon.is_file():
+            self.send_error(404, "denia.ico is missing")
+            return
+        body = icon.read_bytes()
+        self.send_response(200)
+        self.send_header("Content-Type", "image/x-icon")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
 
     def do_POST(self) -> None:
         parsed = urlparse(self.path)
