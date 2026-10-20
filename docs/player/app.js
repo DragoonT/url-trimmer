@@ -10,7 +10,7 @@ import {
 import { initSortableList } from "./dnd.js";
 import { icon, setIcon, mountIcons } from "./icons.js";
 import { addCreateCookieButton } from "./cookies.js";
-import { exampleResponse, usesExample } from "./example.js";
+import { deleteExampleFile, exampleFileUrl, exampleResponse, saveExampleFile, usesExample } from "./example.js";
 
 const state = {
   playlists: [],
@@ -501,6 +501,7 @@ function renderTracks() {
       if (!ok) return;
       const wasPlaying = Number(row.dataset.index) === state.index;
       await api(`/api/playlists/${state.currentPlaylistId}/items/${track.id}`, { method: "DELETE" });
+      if (track.source === "browser") await deleteExampleFile(track.id).catch(() => {});
       if (wasPlaying) {
         stopAll();
         state.index = -1;
@@ -659,7 +660,11 @@ async function playIndex(index, seekTime = 0, autoplay = true) {
   if(track.source==='online'&&!navigator.onLine){showToast('You are offline. Connect to play this online track.','warning');return;}
 
   state.index = index;
-  const url = mediaUrl(track);
+  const url = track.source === "browser" ? await exampleFileUrl(track.id) : mediaUrl(track);
+  if (!url) {
+    showToast("Choose this file again. This browser no longer has it.", "warning");
+    return;
+  }
 
   stopAll();
   showMediaMode(track);
@@ -957,15 +962,28 @@ els.addTrackBtn.addEventListener("click", async () => {
     if (files.length) {
       els.addTrackBtn.disabled = true;
       let added = 0;
+      const onWebsite = await usesExample();
       for (const file of files) {
-        const form = new FormData();
-        form.append("file", file);
         const trackTitle =
           files.length === 1 && title
             ? title
             : file.name.replace(/\.[^.]+$/, "");
-        form.append("title", trackTitle);
-        await api(`/api/playlists/${state.currentPlaylistId}/items`, { method: "POST", body: form });
+        if (onWebsite) {
+          const id = `file-${Date.now().toString(36)}${Math.random().toString(36).slice(2, 6)}`;
+          const ext = (file.name.split(".").pop() || "").toLowerCase();
+          const kind = ["mp4", "webm", "mkv"].includes(ext) ? "video" : "audio";
+          await saveExampleFile(id, file);
+          await api(`/api/playlists/${state.currentPlaylistId}/items`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ source: "browser", id, title: trackTitle, kind, ext, name: file.name }),
+          });
+        } else {
+          const form = new FormData();
+          form.append("file", file);
+          form.append("title", trackTitle);
+          await api(`/api/playlists/${state.currentPlaylistId}/items`, { method: "POST", body: form });
+        }
         added += 1;
       }
       els.trackTitle.value = "";
@@ -978,6 +996,10 @@ els.addTrackBtn.addEventListener("click", async () => {
         "success",
       );
     } else if (path) {
+      if (await usesExample()) {
+        showToast("On the website, choose the file. It stays in this browser and plays here.", "warning");
+        return;
+      }
       await api(`/api/playlists/${state.currentPlaylistId}/items`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
