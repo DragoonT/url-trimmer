@@ -1752,8 +1752,19 @@ static NSString *TPTime(double seconds) {
     [self playIndex:next];
 }
 - (void)trackEnded { if (self.repeatMode == 2) [self playIndex:self.currentTrack]; else [self step:1]; }
+- (void)warnNotesOff {
+    if ([self notesOn] || self.presentedViewController) return;
+    UIAlertController *ask = [UIAlertController alertControllerWithTitle:@"Notifications are off" message:@"Turn notifications on to show the playing song on the lock screen." preferredStyle:UIAlertControllerStyleAlert];
+    [ask addAction:[UIAlertAction actionWithTitle:@"Not now" style:UIAlertActionStyleCancel handler:nil]];
+    [ask addAction:[UIAlertAction actionWithTitle:@"Turn on" style:UIAlertActionStyleDefault handler:^(__unused UIAlertAction *action) {
+        [[NSUserDefaults standardUserDefaults] setBool:YES forKey:@"notes"];
+        [self publishNowPlaying];
+    }]];
+    [self presentViewController:ask animated:YES completion:nil];
+}
 - (void)playIndex:(NSInteger)index {
     if (index < 0 || index >= (NSInteger)self.tracks.count) return;
+    [self warnNotesOff];
     NSDictionary *track = self.tracks[index];
     NSString *page = track[@"uri"] ?: @"";
     BOOL youtube = [page containsString:@"youtube.com"] || [page containsString:@"youtu.be"];

@@ -124,6 +124,8 @@ class MainActivity : Activity() {
     private lateinit var session: MediaSession
     private var noteKey = ""
     private var askedNotes = false
+    private var noteDenied = false
+    private var notesDialog: AlertDialog? = null
     private var serviceUp = false
     private var cover: Bitmap? = null
     private val metaCache = HashMap<String, Meta>()
@@ -213,6 +215,7 @@ class MainActivity : Activity() {
         val filter = IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE)
         if (Build.VERSION.SDK_INT >= 33) registerReceiver(updateReceiver, filter, RECEIVER_NOT_EXPORTED)
         else registerReceiver(updateReceiver, filter)
+        if (notesOn) ensureNotePermission()
     }
 
     override fun onStop() {
@@ -312,7 +315,10 @@ class MainActivity : Activity() {
 
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
-        if (requestCode == 44 && grantResults.firstOrNull() == PackageManager.PERMISSION_GRANTED) syncSession(true)
+        if (requestCode == 44) {
+            noteDenied = grantResults.firstOrNull() != PackageManager.PERMISSION_GRANTED
+            if (!noteDenied) syncSession(true)
+        }
     }
 
     @Deprecated("Phone back stack")
@@ -1007,6 +1013,7 @@ class MainActivity : Activity() {
     }
 
     private fun play(index: Int, seekMs: Int) {
+        warnNotesOff()
         val track = library.current().tracks.getOrNull(index) ?: return
         if (track.uri.isBlank()) {
             toast("Choose this file again")
@@ -1824,6 +1831,44 @@ class MainActivity : Activity() {
         pushNotification(track.title, line, playing)
     }
 
+    private fun notesBlocked(): Boolean {
+        if (!notesOn) return true
+        val manager = getSystemService(NotificationManager::class.java)
+        if (!manager.areNotificationsEnabled()) return true
+        return Build.VERSION.SDK_INT >= 33 &&
+            noteDenied &&
+            checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+    }
+
+    private fun ensureNotePermission() {
+        if (Build.VERSION.SDK_INT < 33 || checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED) return
+        askedNotes = true
+        requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 44)
+    }
+
+    private fun warnNotesOff() {
+        if (!notesBlocked() || notesDialog?.isShowing == true) return
+        notesDialog = AlertDialog.Builder(this)
+            .setTitle("Notifications are off")
+            .setMessage("Turn notifications on to show the playing song on the shade and the lock screen.")
+            .setPositiveButton("Turn on") { _, _ ->
+                notesOn = true
+                getSharedPreferences("trim-playlist", MODE_PRIVATE).edit().putBoolean("notes", true).apply()
+                val manager = getSystemService(NotificationManager::class.java)
+                val needsPermission = Build.VERSION.SDK_INT >= 33 &&
+                    checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+                if (!manager.areNotificationsEnabled()) {
+                    startActivity(Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, packageName))
+                } else if (needsPermission) {
+                    ensureNotePermission()
+                } else {
+                    syncSession(true)
+                }
+            }
+            .setNegativeButton("Not now", null)
+            .show()
+    }
+
     private fun pushNotification(title: String, line: String, playing: Boolean) {
         if (!notesOn) {
             if (serviceUp) {
@@ -1834,10 +1879,6 @@ class MainActivity : Activity() {
             return
         }
         if (Build.VERSION.SDK_INT >= 33 && checkSelfPermission(Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
-            if (!askedNotes) {
-                askedNotes = true
-                requestPermissions(arrayOf(Manifest.permission.POST_NOTIFICATIONS), 44)
-            }
             noteKey = ""
             return
         }
