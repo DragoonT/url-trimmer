@@ -15,6 +15,7 @@ import webview
 
 import account_connections
 from app_paths import is_frozen
+from app_update import offer_update
 from playlist_server import (
     PLAYLISTS_DIR,
     PlaylistHTTPServer,
@@ -148,7 +149,7 @@ def run_desktop_window(
     thread.start()
     wait_for_server(url)
 
-    webview.create_window(
+    window = webview.create_window(
         "Trim Playlist",
         url,
         width=1280,
@@ -158,7 +159,7 @@ def run_desktop_window(
         js_api=DesktopSignIn(),
         text_select=True,
     )
-    webview.start()
+    webview.start(lambda: offer_update(window))
 
     if stop_server(server, thread):
         if not is_frozen():

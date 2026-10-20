@@ -20,8 +20,8 @@ if ($LASTEXITCODE -ne 0) { throw 'Windows IPA Builder toolchain is not ready.' }
   --name 'Trim Playlist' `
   --bundle-id 'com.dragoon.trimplaylist' `
   --developer 'DragoonT' `
-  --version '0.3.2' `
-  --build-number '14' `
+  --version '0.1.0' `
+  --build-number '1' `
   --min-ios '16.5' `
   --framework UIKit `
   --framework Foundation `

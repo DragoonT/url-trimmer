@@ -29,7 +29,7 @@ On NixOS, unzip `TrimPlaylist-Other-OS.zip`, run `nix develop`, then run `python
 
 ## Phone
 
-The phone apps are version 0.3.2.
+The phone apps are version 0.1.0.
 
 - Android: install [TrimPlaylist-Android.apk](https://dragoont.github.io/url-trimmer/downloads/TrimPlaylist-Android.apk). Building it is described in the [Android](Android/README.md) page.
 - iPhone: install [TrimPlaylist-iOS.ipa](https://dragoont.github.io/url-trimmer/downloads/TrimPlaylist-iOS.ipa). Building and installing it is described in the [iOS](iOS/README.md) page.

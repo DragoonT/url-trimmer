@@ -1,6 +1,6 @@
 # Trim Playlist for Android
 
-This is the Trim Playlist app for Android, version 0.3.2. Playlists, downloads, trim, and cookie files stay on the phone. The app does not embed Python, yt-dlp, or FFmpeg.
+This is the Trim Playlist app for Android, version 0.1.0. Playlists, downloads, trim, and cookie files stay on the phone. The app does not embed Python, yt-dlp, or FFmpeg.
 
 ## What you can do
 

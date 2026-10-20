@@ -11,8 +11,8 @@ android {
         applicationId = "com.dragoon.trimplaylist"
         minSdk = 26
         targetSdk = 35
-        versionCode = 14
-        versionName = "0.3.2"
+        versionCode = 1
+        versionName = "0.1.0"
     }
 
     compileOptions {
@@ -22,5 +22,9 @@ android {
 
     kotlinOptions {
         jvmTarget = "17"
+    }
+
+    buildFeatures {
+        buildConfig = true
     }
 }

@@ -93,6 +93,9 @@ static NSString *TPTime(double seconds) {
 @property(nonatomic, assign) BOOL downloadCleared;
 @property(nonatomic, assign) float downloadFraction;
 @property(nonatomic, copy) NSString *cookieName;
+@property(nonatomic, copy) NSString *latestLine;
+@property(nonatomic, copy) NSString *latestIpa;
+@property(nonatomic, assign) BOOL updateChecking;
 @property(nonatomic, copy) NSString *draftUrl;
 @property(nonatomic, copy) NSString *draftName;
 @property(nonatomic, copy) NSString *draftStart;
@@ -313,7 +316,19 @@ static NSString *TPTime(double seconds) {
     [page addArrangedSubview:[self lab:@"Notification" size:14 color:TPMuted() bold:NO]];
     [page addArrangedSubview:[self lab:@"Show the playing song on the lock screen." size:13 color:TPMuted() bold:NO]];
     [page addArrangedSubview:[self actionPill:@"bell.fill" title:([self notesOn] ? @"Notifications on" : @"Notifications off") filled:[self notesOn] action:@selector(toggleNotes)]];
+    [page addArrangedSubview:[self lab:@"Update" size:14 color:TPMuted() bold:NO]];
+    UIColor *ink = [self darkTheme] ? UIColor.whiteColor : UIColor.blackColor;
+    [page addArrangedSubview:[self lab:[NSString stringWithFormat:@"This version %@", [self appVersion]] size:15 color:ink bold:NO]];
+    [page addArrangedSubview:[self lab:(self.latestLine.length ? self.latestLine : @"Latest version") size:15 color:ink bold:NO]];
+    if (self.latestIpa.length) [page addArrangedSubview:[self actionPill:@"arrow.down.circle" title:@"Update" filled:YES action:@selector(openLatestIpa)]];
+    [page addArrangedSubview:[self actionPill:@"arrow.clockwise" title:@"Check for update" filled:NO action:@selector(checkForUpdate)]];
+    if (!self.latestLine.length && !self.updateChecking) dispatch_async(dispatch_get_main_queue(), ^{ [self checkForUpdate]; });
     return page;
+}
+- (NSString *)appVersion { return @"0.1.0"; }
+- (void)openLatestIpa {
+    NSURL *url = [NSURL URLWithString:self.latestIpa ?: @""];
+    if (url) [[UIApplication sharedApplication] openURL:url options:@{} completionHandler:nil];
 }
 - (void)useDark { [[NSUserDefaults standardUserDefaults] setBool:YES forKey:@"dark"]; self.view.backgroundColor = UIColor.blackColor; [self show]; }
 - (void)useLight { [[NSUserDefaults standardUserDefaults] setBool:NO forKey:@"dark"]; self.view.backgroundColor = [UIColor colorWithWhite:0.96 alpha:1]; [self show]; }
@@ -2108,6 +2123,41 @@ static NSString *TPTime(double seconds) {
     NSDictionary *root = @{@"selected": @(self.selected), @"currentTrack": @(self.currentTrack), @"repeatMode": @(self.repeatMode), @"shuffle": @(self.shuffle), @"playlists": self.playlists ?: @[]};
     NSData *data = [NSJSONSerialization dataWithJSONObject:root options:0 error:nil];
     if (data) [[NSUserDefaults standardUserDefaults] setObject:[[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding] forKey:@"library-v2"];
+}
+- (BOOL)version:(NSString *)remote isNewerThan:(NSString *)local {
+    NSArray *left = [remote componentsSeparatedByString:@"."];
+    NSArray *right = [local componentsSeparatedByString:@"."];
+    NSUInteger width = MAX(left.count, right.count);
+    for (NSUInteger index = 0; index < width; index++) {
+        NSInteger a = index < left.count ? [left[index] integerValue] : 0;
+        NSInteger b = index < right.count ? [right[index] integerValue] : 0;
+        if (a != b) return a > b;
+    }
+    return NO;
+}
+- (void)checkForUpdate {
+    if (self.updateChecking) return;
+    self.updateChecking = YES;
+    self.latestLine = @"Checking…";
+    if (self.page == 7) [self show];
+    NSURL *url = [NSURL URLWithString:@"https://dragoont.github.io/url-trimmer/latest.json"];
+    [[[NSURLSession sharedSession] dataTaskWithURL:url completionHandler:^(NSData *data, NSURLResponse *response, NSError *error) {
+        (void)response;
+        NSString *line = @"Latest version unavailable";
+        NSString *ipa = @"";
+        NSDictionary *json = (!error && data) ? [NSJSONSerialization JSONObjectWithData:data options:0 error:nil] : nil;
+        NSString *remote = json[@"version"];
+        if ([remote isKindOfClass:NSString.class] && remote.length) {
+            line = [NSString stringWithFormat:@"Latest version %@", remote];
+            if ([self version:remote isNewerThan:[self appVersion]] && [json[@"ios"] isKindOfClass:NSString.class]) ipa = json[@"ios"];
+        }
+        dispatch_async(dispatch_get_main_queue(), ^{
+            self.updateChecking = NO;
+            self.latestLine = line;
+            self.latestIpa = ipa;
+            if (self.page == 7) [self show];
+        });
+    }] resume];
 }
 - (void)toast:(NSString *)message {
     UILabel *label = [self lab:message size:14 color:UIColor.whiteColor bold:YES];

@@ -3,11 +3,15 @@ package com.dragoon.trimplaylist
 import android.Manifest
 import android.app.Activity
 import android.app.AlertDialog
+import android.app.DownloadManager
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
+import android.content.BroadcastReceiver
+import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.graphics.Bitmap
 import android.graphics.Canvas
@@ -27,10 +31,12 @@ import android.media.session.PlaybackState
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
+import android.os.Environment
 import android.os.Handler
 import android.os.Looper
 import android.os.Message
 import android.provider.OpenableColumns
+import android.provider.Settings
 import android.text.Editable
 import android.text.TextWatcher
 import android.view.Gravity
@@ -54,7 +60,9 @@ import android.widget.SeekBar
 import android.widget.TextView
 import android.widget.Toast
 import java.io.File
+import java.net.URL
 import kotlin.concurrent.thread
+import org.json.JSONObject
 
 class MainActivity : Activity() {
     private enum class Page { LIST, DETAIL, PLAYER, QUEUE, URL, ONLINE, EDITOR, SIGNIN, SETTINGS, ABOUT }
@@ -202,6 +210,9 @@ class MainActivity : Activity() {
         applyBars()
         show()
         ticker.post(tick)
+        val filter = IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE)
+        if (Build.VERSION.SDK_INT >= 33) registerReceiver(updateReceiver, filter, RECEIVER_NOT_EXPORTED)
+        else registerReceiver(updateReceiver, filter)
     }
 
     override fun onStop() {
@@ -221,6 +232,7 @@ class MainActivity : Activity() {
     }
 
     override fun onDestroy() {
+        unregisterReceiver(updateReceiver)
         ticker.removeCallbacks(tick)
         PlaybackBridge.onAction = null
         noteKey = ""
@@ -228,6 +240,74 @@ class MainActivity : Activity() {
         session.release()
         engine.release()
         super.onDestroy()
+    }
+
+    private var updateDownloadId = -1L
+    private var updateChecking = false
+    private var latestLine = ""
+    private var latestApk = ""
+
+    private val updateReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) {
+            val id = intent.getLongExtra(DownloadManager.EXTRA_DOWNLOAD_ID, -1)
+            if (id != updateDownloadId) return
+            if (Build.VERSION.SDK_INT >= 26 && !packageManager.canRequestPackageInstalls()) {
+                startActivity(Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:$packageName")))
+                return
+            }
+            val uri = getSystemService(DownloadManager::class.java).getUriForDownloadedFile(id) ?: return
+            startActivity(Intent(Intent.ACTION_VIEW).apply {
+                setDataAndType(uri, "application/vnd.android.package-archive")
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
+            })
+        }
+    }
+
+    private fun newerVersion(remote: String, local: String): Boolean {
+        fun parts(value: String) = value.split(".").map { it.toIntOrNull() ?: 0 }
+        val left = parts(remote)
+        val right = parts(local)
+        val width = maxOf(left.size, right.size)
+        for (index in 0 until width) {
+            val diff = left.getOrElse(index) { 0 } - right.getOrElse(index) { 0 }
+            if (diff != 0) return diff > 0
+        }
+        return false
+    }
+
+    private fun checkForUpdate() {
+        if (updateChecking) return
+        updateChecking = true
+        latestLine = "Checking…"
+        if (history.last() == Page.SETTINGS) show()
+        thread {
+            var line = "Latest version unavailable"
+            var apk = ""
+            try {
+                val json = JSONObject(URL("https://dragoont.github.io/url-trimmer/latest.json").readText())
+                val version = json.optString("version")
+                if (version.isNotBlank()) {
+                    line = "Latest version $version"
+                    if (newerVersion(version, BuildConfig.VERSION_NAME)) apk = json.optString("android")
+                }
+            } catch (_: Exception) {
+            }
+            runOnUiThread {
+                updateChecking = false
+                latestLine = line
+                latestApk = apk
+                if (history.last() == Page.SETTINGS) show()
+            }
+        }
+    }
+
+    private fun downloadUpdate(url: String) {
+        val request = DownloadManager.Request(Uri.parse(url))
+            .setMimeType("application/vnd.android.package-archive")
+            .setTitle("Trim Playlist update")
+            .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
+            .setDestinationInExternalFilesDir(this, Environment.DIRECTORY_DOWNLOADS, "TrimPlaylist-update.apk")
+        updateDownloadId = getSystemService(DownloadManager::class.java).enqueue(request)
     }
 
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
@@ -1373,6 +1453,13 @@ class MainActivity : Activity() {
             } else syncSession(true)
             show()
         })
+        root.addView(spaceH(18))
+        root.addView(label("Update", 14f, soft(), false))
+        root.addView(muted("This version ${BuildConfig.VERSION_NAME}"))
+        root.addView(muted(latestLine.ifBlank { "Latest version" }))
+        if (latestApk.isNotBlank()) root.addView(pill("Update", true) { downloadUpdate(latestApk) })
+        root.addView(pill("Check for update", false) { checkForUpdate() })
+        if (latestLine.isBlank() && !updateChecking) root.post { checkForUpdate() }
         return root
     }
 
