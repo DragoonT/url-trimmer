@@ -23,7 +23,7 @@
             python -m venv .venv
             source .venv/bin/activate
             pip install -r requirements.txt
-            echo "Start Trim Playlist with: python trim_playlist_app.py"
+            echo "Start Trim Playlist with: python pc/app/trim_playlist_app.py"
           '';
         };
       });

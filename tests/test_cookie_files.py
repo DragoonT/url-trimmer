@@ -2,7 +2,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-import playlist_server
+import pc.server.playlist_server as playlist_server
 
 
 class CookieFileTests(unittest.TestCase):

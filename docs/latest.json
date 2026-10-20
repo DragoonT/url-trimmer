@@ -1,9 +1,9 @@
 {
   "version": "0.1.0",
   "notes": "https://github.com/DragoonT/url-trimmer/releases/tag/v0.3.2",
-  "windows": "https://dragoont.github.io/url-trimmer/downloads/TrimPlaylist-Setup.exe",
-  "linux": "https://dragoont.github.io/url-trimmer/downloads/TrimPlaylist-Linux.tar.gz",
-  "other": "https://dragoont.github.io/url-trimmer/downloads/TrimPlaylist-Other-OS.zip",
-  "android": "https://dragoont.github.io/url-trimmer/downloads/TrimPlaylist-Android.apk",
-  "ios": "https://dragoont.github.io/url-trimmer/downloads/TrimPlaylist-iOS.ipa"
+  "windows": "https://dragoont.github.io/url-trimmer/downloads/Windows/TrimPlaylist-Setup.exe",
+  "linux": "https://dragoont.github.io/url-trimmer/downloads/Linux/TrimPlaylist-Linux.tar.gz",
+  "other": "https://dragoont.github.io/url-trimmer/downloads/Other-OS/TrimPlaylist-Other-OS.zip",
+  "android": "https://dragoont.github.io/url-trimmer/downloads/Android/TrimPlaylist-Android.apk",
+  "ios": "https://dragoont.github.io/url-trimmer/downloads/iOS/TrimPlaylist-iOS.ipa"
 }

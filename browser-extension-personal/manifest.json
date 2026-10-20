@@ -1,0 +1,41 @@
+{
+  "manifest_version": 3,
+  "name": "Trim Playlist Account Connector",
+  "version": "1.1.0",
+  "description": "Connect a platform session to your local Trim Playlist app.",
+  "permissions": [
+    "cookies",
+    "storage",
+    "scripting",
+    "alarms"
+  ],
+  "host_permissions": [
+    "http://127.0.0.1/*",
+    "http://localhost/*",
+    "https://*.youtube.com/*",
+    "https://*.facebook.com/*",
+    "https://*.instagram.com/*",
+    "https://*.x.com/*",
+    "https://*.twitter.com/*",
+    "https://*.tiktok.com/*",
+    "https://*.twitch.tv/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "http://127.0.0.1/*",
+        "http://localhost/*"
+      ],
+      "js": [
+        "bridge.js"
+      ],
+      "run_at": "document_start"
+    }
+  ],
+  "icons": {
+    "128": "icon128.png"
+  }
+}

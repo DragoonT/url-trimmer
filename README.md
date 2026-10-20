@@ -12,27 +12,24 @@ What changed in this build is in the [release note](https://github.com/DragoonT/
 
 The same files are on the [Trim Playlist website](https://dragoont.github.io/url-trimmer/).
 
-| File | Who it is for | How to open it |
-|------|----------------|----------------|
-| [TrimPlaylist-Windows.zip](https://dragoont.github.io/url-trimmer/downloads/TrimPlaylist-Windows.zip) | Windows | Unzip it. Open **Trim Playlist** inside the `TrimPlaylist` folder. |
-| [TrimPlaylist-Setup.exe](https://dragoont.github.io/url-trimmer/downloads/TrimPlaylist-Setup.exe) | Windows | Run the installer. Open **Trim Playlist** from the Start menu. You can also add a desktop shortcut during setup. |
-| [TrimPlaylist-Linux.tar.gz](https://dragoont.github.io/url-trimmer/downloads/TrimPlaylist-Linux.tar.gz) | Linux | Unpack it. Run `start.sh` inside the `TrimPlaylist` folder. |
-| [TrimPlaylist-Other-OS.zip](https://dragoont.github.io/url-trimmer/downloads/TrimPlaylist-Other-OS.zip) | macOS and NixOS | Unzip it, then follow the system notes below. |
+| Download | Who it is for | How to open it |
+|----------|----------------|----------------|
+| [Windows](https://dragoont.github.io/url-trimmer/downloads/Windows/TrimPlaylist-Windows.zip) | Windows | Unzip it. Open **Trim Playlist** inside the `TrimPlaylist` folder. |
+| [Windows installer](https://dragoont.github.io/url-trimmer/downloads/Windows/TrimPlaylist-Setup.exe) | Windows | Run the installer. Open **Trim Playlist** from the Start menu. You can also add a desktop shortcut during setup. |
+| [Linux](https://dragoont.github.io/url-trimmer/downloads/Linux/TrimPlaylist-Linux.tar.gz) | Linux | Unpack it. Run `start.sh` inside the `TrimPlaylist` folder. |
+| [Android](https://dragoont.github.io/url-trimmer/downloads/Android/TrimPlaylist-Android.apk) | Android | Install the APK. If this phone already has 0.1.0, uninstall that copy first. |
+| [iPhone and iPad](https://dragoont.github.io/url-trimmer/downloads/iOS/TrimPlaylist-iOS.ipa) | iPhone and iPad | Open the IPA. If this phone already has 0.1.0, uninstall that copy first. |
+| [Other OS](https://dragoont.github.io/url-trimmer/downloads/Other-OS/TrimPlaylist-Other-OS.zip) | Other OS | Unzip it, then follow the system notes below. |
 
 The Windows zip and the installer already include what the app needs. You do not install Python yourself for those two files.
 
 Linux needs GTK and WebKit before `start.sh` will open the window. On Debian and Ubuntu, install `libgtk-3-0` and `libwebkit2gtk-4.1-0`.
 
-On macOS, install Python 3, unzip `TrimPlaylist-Other-OS.zip`, and run `start-macos.command`.
-
-On NixOS, unzip `TrimPlaylist-Other-OS.zip`, run `nix develop`, then run `python trim_playlist_app.py`.
+For Other OS, install Python 3. On a Mac, unzip it and run `pc/start-macos.command`. On NixOS, unzip it, run `nix develop`, then run `python pc/app/trim_playlist_app.py`.
 
 ## Phone
 
-The phone apps are version 0.1.0.
-
-- Android: install [TrimPlaylist-Android.apk](https://dragoont.github.io/url-trimmer/downloads/TrimPlaylist-Android.apk). Building it is described in the [Android](Android/README.md) page.
-- iPhone: install [TrimPlaylist-iOS.ipa](https://dragoont.github.io/url-trimmer/downloads/TrimPlaylist-iOS.ipa). Building and installing it is described in the [iOS](iOS/README.md) page.
+The phone apps are version 0.1.0. Android and iPhone and iPad are in the download table above. Building them is described in the [Android](Android/README.md) and [iOS](iOS/README.md) pages.
 
 ## In the app
 

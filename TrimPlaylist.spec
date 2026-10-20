@@ -7,7 +7,7 @@ from PyInstaller.utils.hooks import collect_data_files, collect_submodules
 ROOT = Path(SPECPATH)
 WINDOWS_ICON = ROOT / "denia.ico"
 import runpy
-runpy.run_path(str(ROOT / "package_extension.py"))["package_extension"](ROOT)
+runpy.run_path(str(ROOT / "scripts" / "package_extension.py"))["package_extension"](ROOT)
 
 datas = [(str(ROOT / "player"), "player")]
 if (ROOT / "denia.ico").is_file():
@@ -15,7 +15,7 @@ if (ROOT / "denia.ico").is_file():
 datas += collect_data_files("imageio_ffmpeg")
 
 a = Analysis(
-    ["trim_playlist_app.py"],
+    ["pc/app/trim_playlist_app.py"],
     pathex=[str(ROOT)],
     binaries=[],
     datas=datas,

@@ -2,8 +2,8 @@
 
 
 a = Analysis(
-    ['personal_setup.py'],
-    pathex=[],
+    ['pc/setup/personal_setup.py'],
+    pathex=['.'],
     binaries=[],
     datas=[('browser-extension', 'browser-extension')],
     hiddenimports=[],

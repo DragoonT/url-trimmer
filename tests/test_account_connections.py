@@ -7,8 +7,8 @@ import urllib.request
 from pathlib import Path
 from unittest.mock import patch
 
-import account_connections as accounts
-import playlist_server
+import pc.accounts.account_connections as accounts
+import pc.server.playlist_server as playlist_server
 
 
 class AccountConnectionTests(unittest.TestCase):

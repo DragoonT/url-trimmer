@@ -9,7 +9,7 @@ datas = collect_data_files("imageio_ffmpeg")
 hiddenimports = collect_submodules("yt_dlp") + ["imageio_ffmpeg"]
 
 a = Analysis(
-    ["cut_url.py"],
+    ["pc/downloads/cut_url.py"],
     pathex=[str(ROOT)],
     binaries=[],
     datas=datas,

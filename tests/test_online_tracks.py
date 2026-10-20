@@ -1,7 +1,7 @@
 import unittest
 from unittest.mock import patch
 
-import online_media
+import pc.downloads.online_media as online_media
 
 
 class OnlineTrackTests(unittest.TestCase):

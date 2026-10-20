@@ -3,7 +3,7 @@ import time
 import unittest
 from pathlib import Path
 from unittest.mock import patch
-import download_jobs as downloads
+import pc.downloads.download_jobs as downloads
 import yt_dlp
 
 
@@ -94,7 +94,7 @@ class SelectionTests(unittest.TestCase):
         self.assertIsNone(downloads.download_cookie_path({'auth_source': 'none', 'cookies': 'missing.txt'}))
         with self.assertRaises(ValueError): downloads.download_cookie_path({'cookies': '../secret.txt'})
         with self.assertRaises(ValueError): downloads.download_cookie_path({'auth_source': 'invalid'})
-        import account_connections
+        import pc.accounts.account_connections as account_connections
         cookie = Path(self.temp.name) / 'connected.txt'; cookie.write_text('test')
         with patch.object(account_connections, 'cookie_path', return_value=cookie), patch.object(account_connections, 'list_accounts', return_value=[{'platform': 'youtube', 'connected': True}]):
             self.assertEqual(downloads.download_cookie_path({'auth_source': 'platform', 'platform': 'youtube', 'cookies': 'missing.txt'}), cookie)
