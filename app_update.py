@@ -91,6 +91,8 @@ def offer_update(window) -> None:
         return
     if package_key() == "windows":
         detail = "The installer opens next. Confirm it to replace this copy."
+    elif package_key() == "linux":
+        detail = "The new .tar.gz opens next. Close Trim Playlist, then unpack it over this folder."
     else:
         detail = "The new zip opens next. Close Trim Playlist, then unpack it over this folder."
     agreed = window.create_confirmation_dialog(

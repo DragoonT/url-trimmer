@@ -1248,7 +1248,7 @@ body {
 .track-name{overflow-wrap:anywhere}
 @media(max-width:1100px){.tracks-panel:not(.collapsed){flex:none;height:360px;max-height:50vh}}
 
-#offlineTrackFields[hidden],#onlineTrackFields[hidden],#onlinePreview[hidden],#onlineSelectionType[hidden]{display:none!important}
+#offlineTrackFields[hidden],#onlineTrackFields[hidden],#onlinePreview[hidden],#onlineSelectionType[hidden],#onlineAuthPlatform[hidden],#onlineExtensionConnect[hidden],#onlineAppSignInBox[hidden],#onlineAuthCookie[hidden]{display:none!important}
 #onlineTrackFields{min-width:0}#onlinePreview{margin:12px 0}
 .online-load-progress{height:5px;margin-top:8px;border-radius:99px;overflow:hidden;background:var(--muted)}.online-load-progress>div{height:100%;width:0;background:linear-gradient(90deg,var(--primary),var(--accent));transition:width .25s ease}
 .tracks-heading{display:flex;align-items:center;gap:10px;min-width:0}

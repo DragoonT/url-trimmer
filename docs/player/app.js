@@ -80,15 +80,83 @@ let onlinePreview=null,onlineSelection=new Set(),onlineLoading=false,onlineAddin
 function setOnlineLoadProgress(percent,visible=false){const bar=document.querySelector('#onlineLoadProgress');bar.hidden=!visible;bar.querySelector('div').style.width=`${Math.max(0,Math.min(100,Number(percent)||0))}%`;}
 function clearOnlinePreview(){onlinePreview=null;onlineSelection.clear();document.querySelector('#onlinePreview').hidden=true;setOnlineLoadProgress(0,false);updatePlaylistActions();}
 const sourceChoice=createChoiceDropdown(document.querySelector('#trackSourceSelect'),[['offline','Offline'],['online','Online']],'offline',()=>{
- document.querySelector('#offlineTrackFields').hidden=sourceChoice.value!=='offline';document.querySelector('#onlineTrackFields').hidden=sourceChoice.value!=='online';updatePlaylistActions();
+ document.querySelector('#offlineTrackFields').hidden=sourceChoice.value!=='offline';document.querySelector('#onlineTrackFields').hidden=sourceChoice.value!=='online';if(sourceChoice.value==='online')pullOnlineAuth();updatePlaylistActions();
 });
-const onlineCookieChoice=createChoiceDropdown(document.querySelector('#onlineTrackCookies'),[['','No cookies']],'',clearOnlinePreview);
+const onlineAuthChoice=createChoiceDropdown(document.querySelector('#onlineAuthSelect'),[['cookie','Cookie file'],['extension','Extension account'],['platform','Platform account'],['none','No authentication']],'none',()=>{clearOnlinePreview();updateOnlineAuth();pushOnlineAuth();});
+const onlinePlatformChoice=createChoiceDropdown(document.querySelector('#onlinePlatformSelect'),[['youtube','YouTube'],['facebook','Facebook'],['instagram','Instagram'],['x','X / Twitter'],['tiktok','TikTok'],['twitch','Twitch']],'youtube',()=>{clearOnlinePreview();updateOnlineAuth();pushOnlineAuth();refreshOnlineAccounts();});
+const onlineCookieChoice=createChoiceDropdown(document.querySelector('#onlineTrackCookies'),[['','No cookies']],'',()=>{clearOnlinePreview();pushOnlineAuth();});
 const playbackChoice=createChoiceDropdown(document.querySelector('#onlinePlaybackSelect'),[['video','Video'],['audio','Audio only']],'video');
 const onlineSelectionChoice=createChoiceDropdown(document.querySelector('#onlineSelectionSelect'),[['single','Single video'],['all','Entire playlist']],'single',renderOnlineChoices);
 const onlineUrl=document.querySelector('#onlineTrackUrl');onlineUrl.addEventListener('input',clearOnlinePreview);
-async function refreshOnlineCookies(){try{const names=await api('/api/cookies');onlineCookieChoice.fill([['','No cookies'],...names.map(name=>[name,name])]);}catch(error){showToast(error.message,'error');}}
+let onlineAuthSync=false;
+function trimDownloadForm(){return document.querySelector('.download-form');}
+function paintTrimChoice(name){
+  const form=trimDownloadForm();
+  const input=form?.elements?.[name];
+  if(!input)return;
+  const root=input.nextElementSibling?.classList?.contains('dropdown')?input.nextElementSibling:document.querySelector('#cookieSelect .dropdown');
+  const match=[...root?.querySelectorAll('[data-value]')||[]].find(button=>button.dataset.value===input.value);
+  const label=root?.querySelector('.dropdown-trigger span');
+  if(label&&match)label.textContent=match.textContent;
+}
+function pullOnlineAuth(){
+  const form=trimDownloadForm();
+  if(!form||onlineAuthSync)return;
+  onlineAuthSync=true;
+  onlineAuthChoice.select(form.elements.auth_source?.value||'none');
+  onlinePlatformChoice.select(form.elements.platform?.value||'youtube');
+  onlineCookieChoice.select(form.elements.cookies?.value||'');
+  onlineAuthSync=false;
+  updateOnlineAuth();
+}
+function pushOnlineAuth(){
+  const form=trimDownloadForm();
+  if(!form||onlineAuthSync)return;
+  onlineAuthSync=true;
+  form.elements.auth_source.value=onlineAuthChoice.value;
+  form.elements.platform.value=onlinePlatformChoice.value;
+  form.elements.cookies.value=onlineAuthChoice.value==='cookie'?onlineCookieChoice.value:'';
+  paintTrimChoice('auth_source');
+  paintTrimChoice('platform');
+  paintTrimChoice('cookies');
+  form.elements.auth_source.dispatchEvent(new Event('change',{bubbles:true}));
+  onlineAuthSync=false;
+}
+function updateOnlineAuth(){
+  const source=onlineAuthChoice.value;
+  document.querySelector('#onlineAuthPlatform').hidden=source!=='extension'&&source!=='platform';
+  document.querySelector('#onlineExtensionConnect').hidden=source!=='extension';
+  document.querySelector('#onlineAppSignInBox').hidden=source!=='platform';
+  document.querySelector('#onlineAuthCookie').hidden=source!=='cookie';
+  document.querySelector('#onlineConnectPlatform').href='connect.html?platform='+encodeURIComponent(onlinePlatformChoice.value);
+  if(source==='extension'||source==='platform')refreshOnlineAccounts();
+}
+async function refreshOnlineCookies(){try{const names=await api('/api/cookies');const current=onlineCookieChoice.value||trimDownloadForm()?.elements?.cookies?.value||'';onlineCookieChoice.fill([['','No cookies'],...names.map(name=>[name,name])]);if(current&&names.includes(current))onlineCookieChoice.select(current);}catch(error){showToast(error.message,'error');}}
 onlineCookieChoice.trigger.addEventListener('click',refreshOnlineCookies);refreshOnlineCookies();
-addCreateCookieButton(document.querySelector('#onlineTrackCookies'), async name=>{onlineCookieChoice.select(name);clearOnlinePreview();await refreshOnlineCookies();});
+addCreateCookieButton(document.querySelector('#onlineTrackCookies'), async name=>{onlineCookieChoice.select(name);clearOnlinePreview();await refreshOnlineCookies();pushOnlineAuth();});
+document.querySelector('#onlineConnectPlatform').addEventListener('click',event=>{event.preventDefault();document.querySelector('#connectPlatform')?.click();});
+document.querySelector('#onlineAppSignIn').onclick=()=>document.querySelector('#appSignIn')?.click();
+let onlineAccountPolling=false;
+async function refreshOnlineAccounts(){
+  if(onlineAccountPolling)return;
+  const source=onlineAuthChoice.value;
+  const list=document.querySelector('#onlineAccountList');
+  if(source!=='extension'&&source!=='platform'){list.replaceChildren();return;}
+  if(await usesExample()){list.replaceChildren();return;}
+  onlineAccountPolling=true;
+  try{
+    const accounts=await api('/api/accounts');
+    const account=accounts.find(item=>item.platform===onlinePlatformChoice.value);
+    list.replaceChildren();
+    if(!account)return;
+    const row=document.createElement('div');row.className='account-row';
+    const text=document.createElement('span');text.textContent=account.name+' · '+(account.connected?'Signed in (saved session)':'Not connected');row.append(text);
+    list.append(row);
+  }catch(error){list.textContent=error.message;}
+  finally{onlineAccountPolling=false;}
+}
+updateOnlineAuth();
+setTimeout(()=>{const form=trimDownloadForm();pullOnlineAuth();form?.addEventListener('change',pullOnlineAuth);form?.addEventListener('trim-auth',pullOnlineAuth);},0);
 function renderOnlineChoices(){
  const list=document.querySelector('#onlineTrackChoices');list.replaceChildren();onlineSelection.clear();
  if(!onlinePreview)return;
@@ -107,7 +175,8 @@ document.querySelector('#loadOnlineUrl').onclick=async()=>{
  if(onlineLoading)return;const url=onlineUrl.value.trim(),cookies=onlineCookieChoice.value;const status=document.querySelector('#onlineLoadStatus');
  clearOnlinePreview();onlineLoading=true;document.querySelector('#loadOnlineUrl').disabled=true;status.textContent='Preparing URL · 0%';setOnlineLoadProgress(0,true);
  try{
-  const response=await api('/api/downloads/preview',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({url,cookies,auth_source:'cookie'})});
+  const auth=onlineAuthChoice.value;
+  const response=await api('/api/downloads/preview',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({url,cookies:auth==='cookie'?cookies:'',auth_source:auth,platform:onlinePlatformChoice.value})});
   let job;do{await new Promise(resolve=>setTimeout(resolve,350));job=await api('/api/downloads/'+response.id);const percent=job.percent??0;status.textContent=`${job.message||'Loading URL'} · ${percent}%`;setOnlineLoadProgress(percent,true);}while(job.status==='running');
   if(job.status==='error')throw Error(job.message);
   if(url!==onlineUrl.value.trim()||cookies!==onlineCookieChoice.value){status.textContent='URL or cookies changed. Load again.';return;}

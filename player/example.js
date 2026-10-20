@@ -24,6 +24,43 @@ function writeState(next) {
   localStorage.setItem(STORE, JSON.stringify(next));
 }
 
+const FILE_DB = "trim-example-files";
+
+function fileDb() {
+  return new Promise((resolve, reject) => {
+    const request = indexedDB.open(FILE_DB, 1);
+    request.onupgradeneeded = () => request.result.createObjectStore("files");
+    request.onsuccess = () => resolve(request.result);
+    request.onerror = () => reject(request.error);
+  });
+}
+
+export function saveExampleFile(id, file) {
+  return fileDb().then((db) => new Promise((resolve, reject) => {
+    const tx = db.transaction("files", "readwrite");
+    tx.objectStore("files").put(file, id);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  }));
+}
+
+export function deleteExampleFile(id) {
+  return fileDb().then((db) => new Promise((resolve, reject) => {
+    const tx = db.transaction("files", "readwrite");
+    tx.objectStore("files").delete(id);
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  }));
+}
+
+export function exampleFileUrl(id) {
+  return fileDb().then((db) => new Promise((resolve, reject) => {
+    const request = db.transaction("files", "readonly").objectStore("files").get(id);
+    request.onsuccess = () => resolve(request.result ? URL.createObjectURL(request.result) : "");
+    request.onerror = () => reject(request.error);
+  }));
+}
+
 let decision;
 
 export function usesExample() {
@@ -94,6 +131,23 @@ export function exampleResponse(url, options = {}) {
     if (playlist) playlist.items = playlist.items.filter((item) => item.id !== decodeURIComponent(parts[4]));
     writeState(data);
     return {};
+  }
+  if (parts[0] === "api" && parts[1] === "playlists" && parts[3] === "items" && method === "POST") {
+    const playlist = data.playlists.find((item) => item.id === decodeURIComponent(parts[2]));
+    if (!playlist) throw Error("Playlist not found");
+    const body = bodyOf(options);
+    if (body.source !== "browser" || !body.id) throw Error("On the website, choose the file. It stays in this browser and plays here.");
+    playlist.items.push({
+      id: String(body.id),
+      title: String(body.title || body.name || "Track"),
+      source: "browser",
+      kind: body.kind === "video" ? "video" : "audio",
+      ext: String(body.ext || ""),
+      name: String(body.name || ""),
+      missing: false,
+    });
+    writeState(data);
+    return { id: body.id };
   }
   if (path === "/api/cookies" && method === "GET") return Object.keys(data.cookies).sort();
   if (path === "/api/cookies" && method === "POST") {

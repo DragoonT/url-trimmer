@@ -1968,6 +1968,22 @@ static NSString *TPTime(double seconds) {
     url.keyboardType = UIKeyboardTypeURL;
     [url addTarget:self action:@selector(onlineDraftChanged:) forControlEvents:UIControlEventEditingChanged];
     [form addArrangedSubview:url];
+    [form addArrangedSubview:[self lab:@"Authentication" size:13 color:TPMuted() bold:NO]];
+    NSArray *auth = @[@"Cookie file", @"Platform account", @"No authentication"];
+    [form addArrangedSubview:[self menuField:auth[self.downloadAuth] action:@selector(pickAuth)]];
+    if (self.downloadAuth == 0) {
+        [form addArrangedSubview:[self lab:@"Cookies" size:13 color:TPMuted() bold:NO]];
+        [form addArrangedSubview:[self menuField:(self.cookieName.length ? self.cookieName : @"No cookies") action:@selector(pickCookie)]];
+        [form addArrangedSubview:[self tap:@"Create new" color:UIColor.whiteColor action:@selector(createCookie)]];
+    }
+    if (self.downloadAuth == 1) {
+        NSArray *platforms = @[@"YouTube", @"Facebook", @"Instagram", @"X / Twitter", @"TikTok", @"Twitch"];
+        [form addArrangedSubview:[self lab:@"Platform" size:13 color:TPMuted() bold:NO]];
+        [form addArrangedSubview:[self menuField:platforms[self.downloadPlatform] action:@selector(pickPlatform)]];
+        BOOL connected = [[NSUserDefaults standardUserDefaults] boolForKey:[self platformKey]];
+        [form addArrangedSubview:[self lab:(connected ? @"Signed in on this iPhone." : @"Not signed in.") size:13 color:TPMuted() bold:NO]];
+        [form addArrangedSubview:[self tap:(connected ? @"Open sign-in again" : @"Sign in") color:UIColor.whiteColor action:@selector(openSignIn)]];
+    }
     [form addArrangedSubview:[self lab:@"Format" size:13 color:TPMuted() bold:NO]];
     [form addArrangedSubview:[self menuField:(self.onlineFormat ? @"Audio only" : @"MP4 video") action:@selector(pickOnlineFormat)]];
     [form addArrangedSubview:[self tap:@"Load" color:UIColor.whiteColor action:@selector(loadOnline)]];

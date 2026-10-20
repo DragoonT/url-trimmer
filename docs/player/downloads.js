@@ -167,6 +167,7 @@ document.addEventListener('visibilitychange',()=>{if(document.visibilityState===
    }
    updateDownloadType();updateFormat();updateAuthentication();
    await refreshCookies();cookies.syncLabel();
+   form.dispatchEvent(new Event('trim-auth'));
   }
  }catch(error){showToast(error.message,'error');}
  finally{draftReady=true;}
@@ -193,10 +194,11 @@ panel.querySelector('#appSignIn').onclick=async()=>{
  const platform=form.elements.platform.value;
  connectingPlatform={platform,previous:accountVersions.get(platform)||0};
  const statusLine=panel.querySelector('#appSignInStatus');
- if(!window.pywebview?.api?.sign_in){const pages={youtube:'https://accounts.google.com/ServiceLogin?service=youtube&hl=en&passive=true&continue=https%3A%2F%2Fm.youtube.com%2F',facebook:'https://m.facebook.com/login',instagram:'https://www.instagram.com/accounts/login/',x:'https://x.com/i/flow/login',tiktok:'https://www.tiktok.com/login',twitch:'https://www.twitch.tv/login'};const opened=window.open(pages[platform],'trim-platform-signin','width=420,height=760');statusLine.textContent=opened?'Sign-in window opened, the same page the app uses.':'Allow the sign-in window, then choose Sign in again.';return;}
- statusLine.textContent='Opening sign-in in the app window…';
+ const say=text=>{statusLine.textContent=text;const online=document.querySelector('#onlineAppSignInStatus');if(online)online.textContent=text;};
+ if(!window.pywebview?.api?.sign_in){const pages={youtube:'https://accounts.google.com/ServiceLogin?service=youtube&hl=en&passive=true&continue=https%3A%2F%2Fm.youtube.com%2F',facebook:'https://m.facebook.com/login',instagram:'https://www.instagram.com/accounts/login/',x:'https://x.com/i/flow/login',tiktok:'https://www.tiktok.com/login',twitch:'https://www.twitch.tv/login'};const opened=window.open(pages[platform],'trim-platform-signin','width=420,height=760');say(opened?'Sign-in window opened, the same page the app uses.':'Allow the sign-in window, then choose Sign in again.');return;}
+ say('Opening sign-in in the app window…');
  try{const result=await window.pywebview.api.sign_in(platform);if(result&&result.error)throw Error(result.error);}
- catch(error){statusLine.textContent=error.message||'Could not open sign-in';}
+ catch(error){say(error.message||'Could not open sign-in');}
 };
 async function refreshAccounts(){
  if(accountPolling||!['extension','platform'].includes(form.elements.auth_source.value))return;accountPolling=true;

@@ -16,7 +16,7 @@ The same files are on the [Trim Playlist website](https://dragoont.github.io/url
 |------|----------------|----------------|
 | [TrimPlaylist-Windows.zip](https://dragoont.github.io/url-trimmer/downloads/TrimPlaylist-Windows.zip) | Windows | Unzip it. Open **Trim Playlist** inside the `TrimPlaylist` folder. |
 | [TrimPlaylist-Setup.exe](https://dragoont.github.io/url-trimmer/downloads/TrimPlaylist-Setup.exe) | Windows | Run the installer. Open **Trim Playlist** from the Start menu. You can also add a desktop shortcut during setup. |
-| [TrimPlaylist-Linux.zip](https://dragoont.github.io/url-trimmer/downloads/TrimPlaylist-Linux.zip) | Linux | Unzip it. Run `start.sh` inside the `TrimPlaylist` folder. |
+| [TrimPlaylist-Linux.tar.gz](https://dragoont.github.io/url-trimmer/downloads/TrimPlaylist-Linux.tar.gz) | Linux | Unpack it. Run `start.sh` inside the `TrimPlaylist` folder. |
 | [TrimPlaylist-Other-OS.zip](https://dragoont.github.io/url-trimmer/downloads/TrimPlaylist-Other-OS.zip) | macOS and NixOS | Unzip it, then follow the system notes below. |
 
 The Windows zip and the installer already include what the app needs. You do not install Python yourself for those two files.

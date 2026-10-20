@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Trim Playlist</title>
-  <link rel="icon" href="/denia.ico" type="image/x-icon">
+  <link rel="icon" href="../denia.ico" type="image/x-icon">
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -68,7 +68,14 @@
         </div>
         <div id="onlineTrackFields" hidden>
           <label class="field"><span class="field-label">Video or playlist URL</span><input class="input" id="onlineTrackUrl" type="url" placeholder="https://…"></label>
-          <div class="field"><span class="field-label">Cookies (optional)</span><div id="onlineTrackCookies"></div></div>
+          <div class="field"><span class="field-label">Authentication</span><div id="onlineAuthSelect"></div></div>
+          <div id="onlineAuthPlatform" hidden>
+            <div class="field"><span class="field-label">Platform</span><div id="onlinePlatformSelect"></div></div>
+            <div id="onlineAccountList" class="account-list"></div>
+            <div id="onlineExtensionConnect"><a id="onlineConnectPlatform" class="btn btn-outline" target="_blank" rel="noopener noreferrer">Connect with the extension</a><p class="muted">Extension account is the browser connection. It uses Trim Playlist Account Connector and connects the same way as before.</p></div>
+            <div id="onlineAppSignInBox" hidden><button type="button" id="onlineAppSignIn" class="btn btn-outline">Sign in</button><p id="onlineAppSignInStatus" class="muted">Platform account signs in inside the Trim Playlist window, like the phone. It does not open a browser tab and it does not use the extension.</p></div>
+          </div>
+          <div class="field" id="onlineAuthCookie"><span class="field-label">Cookies</span><div id="onlineTrackCookies"></div></div>
           <div class="field"><span class="field-label">Playback</span><div id="onlinePlaybackSelect"></div></div>
           <button type="button" class="btn btn-outline w-full" id="loadOnlineUrl">Load URL</button>
           <p class="muted" id="onlineLoadStatus" role="status"></p>
