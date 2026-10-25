@@ -21,3 +21,25 @@ cookies/*.tmp
 # User playlist metadata may contain private online URLs
 playlists/*.json
 playlists/*.tmp
+
+# Tauri desktop shell
+node_modules/
+src-tauri/target/
+src-tauri/gen/
+src-tauri/resources/server/
+dist-tauri/
+app-icon.png
+
+# Local AI agent folders
+.agents/
+
+# Python caches
+__pycache__/
+*.py[cod]
+
+# Local run logs
+logs/
+
+# OS junk
+.DS_Store
+Thumbs.db

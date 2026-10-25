@@ -1,0 +1,14 @@
+{
+  "name": "trim-playlist-desktop",
+  "private": true,
+  "version": "0.3.2",
+  "scripts": {
+    "tauri": "tauri",
+    "tauri:dev": "tauri dev",
+    "tauri:build": "tauri build",
+    "tauri:icon": "tauri icon app-icon.png"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.5.0"
+  }
+}

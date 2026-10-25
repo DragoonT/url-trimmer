@@ -1,0 +1,99 @@
+# Build the Tauri desktop app on Windows and macOS.
+#
+#   Windows → NSIS setup exe + portable zip (TrimPlaylist-Windows.zip)
+#   macOS   → .app + .dmg (TrimPlaylist_<version>_aarch64.dmg)
+#
+# Tauri cannot cross-compile macOS bundles from Windows, so the .dmg is always
+# built here on a Mac runner. Trigger: push a v* tag or run manually.
+#
+# The bundles are unsigned. Windows SmartScreen may warn on first run; on macOS
+# right-click → Open the first time (or `xattr -cr /Applications/Trim Playlist.app`).
+
+name: Build desktop (Tauri)
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  desktop:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            bundles: nsis
+            portable: "true"
+          - os: macos-latest
+            bundles: "app,dmg"
+            portable: "false"
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - name: Install Python dependencies
+        run: python -m pip install -r requirements.txt -r requirements-build.txt
+
+      - name: Build the headless server sidecar (PyInstaller)
+        run: python -m PyInstaller --clean --noconfirm TrimPlaylistServer.spec
+
+      - name: Stage the sidecar into src-tauri/resources
+        shell: pwsh
+        run: |
+          if (Test-Path "src-tauri/resources/server") {
+            Remove-Item -Recurse -Force "src-tauri/resources/server"
+          }
+          New-Item -ItemType Directory -Force "src-tauri/resources/server" | Out-Null
+          Copy-Item -Recurse -Force "dist/TrimPlaylistServer" "src-tauri/resources/server/TrimPlaylistServer"
+          Get-ChildItem "src-tauri/resources/server/TrimPlaylistServer" | Select-Object -First 5
+
+      - name: Install the Tauri CLI
+        run: pnpm install
+
+      - name: Build the Tauri app
+        run: pnpm tauri build --bundles ${{ matrix.bundles }}
+
+      - name: Assemble the portable Windows zip
+        if: matrix.portable == 'true'
+        shell: pwsh
+        run: |
+          $release = "src-tauri/target/release"
+          $portable = "dist-tauri/TrimPlaylist"
+          New-Item -ItemType Directory -Force "$portable/resources" | Out-Null
+          Copy-Item "$release/Trim Playlist.exe" "$portable/Trim Playlist.exe"
+          Copy-Item -Recurse -Force "src-tauri/resources/server" "$portable/resources/server"
+          pwsh -NoProfile -ExecutionPolicy Bypass -File "scripts/zip-tree.ps1" -Source $portable -Destination "dist-tauri/TrimPlaylist-Windows.zip"
+
+      - name: Collect artifacts
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force "dist-tauri" | Out-Null
+          if (Test-Path "src-tauri/target/release/bundle/nsis") {
+            Copy-Item "src-tauri/target/release/bundle/nsis/*-setup.exe" "dist-tauri/" -ErrorAction SilentlyContinue
+          }
+          if (Test-Path "src-tauri/target/release/bundle/dmg") {
+            Copy-Item "src-tauri/target/release/bundle/dmg/*.dmg" "dist-tauri/" -ErrorAction SilentlyContinue
+          }
+          Get-ChildItem "dist-tauri"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: TrimPlaylist-${{ matrix.os }}
+          path: dist-tauri/*
+          if-no-files-found: error

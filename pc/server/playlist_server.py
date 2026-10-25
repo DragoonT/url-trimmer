@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import os
 import sys
 from pathlib import Path
 for _parent in Path(__file__).resolve().parents:
@@ -330,6 +331,12 @@ class PlaylistHandler(SimpleHTTPRequestHandler):
                 self.send_json(data)
             except ValueError as exc:
                 self.send_json({'error': str(exc)}, 400)
+            return
+
+        if path == "/api/shell":
+            # Which surface is serving this UI: "desktop" (Tauri exe) or "web"
+            # (browser/mobile). The UI hides web-only links like Website.
+            self.send_json({"shell": os.environ.get("TRIM_SHELL", "web")})
             return
 
         if path == "/api/cookies":

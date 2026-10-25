@@ -169,5 +169,14 @@
   <audio id="audio"></audio>
   <script type="module" src="playback/app.js"></script>
 <script type="module" src="download/downloads.js"></script>
+<script type="module">
+  // The desktop exe hides web-only links; the browser/mobile version keeps them.
+  try {
+    const shell = await (await fetch("api/shell")).json();
+    if (shell && shell.shell === "desktop") {
+      document.getElementById("websiteHome")?.remove();
+    }
+  } catch { /* keep the link when detection fails */ }
+</script>
 </body>
 </html>
