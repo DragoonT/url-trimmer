@@ -33,7 +33,7 @@ from pc.downloads.download_jobs import start_download, get_job, preview_download
 import pc.accounts.account_connections as account_connections
 from pc.downloads.online_media import build_online_items, resolve_stream
 
-QUALITY_HEIGHTS = (1080, 720, 480, 360)
+QUALITY_HEIGHTS = (2160, 1440, 1080, 720, 480, 360)
 
 SCRIPT_DIR = app_dir()
 PLAYER_DIR = resource_dir() / "player"
@@ -505,6 +505,13 @@ class PlaylistHandler(SimpleHTTPRequestHandler):
                 return
             self.send_json(playlist)
             return
+        if len(parts) == 6 and parts[0] == "api" and parts[1] == "playlists" and parts[3] == "items" and parts[5] == "volume":
+            item = set_item_volume(parts[2], parts[4], self.read_json().get("volume"))
+            if item is None:
+                self.send_json({"error": "Not found"}, 404)
+                return
+            self.send_json(item)
+            return
         if len(parts) == 3 and parts[0] == "api" and parts[1] == "playlists":
             playlist = update_playlist(parts[2], self.read_json())
             if playlist is None:
@@ -906,6 +913,27 @@ def remove_item(playlist_id: str, item_id: str) -> bool:
     delete_upload_file(playlist_id, removed)
     cleanup_orphan_uploads(playlist_id, data)
     return True
+
+
+def clamp_track_volume(value) -> float:
+    try:
+        volume = float(value)
+    except (TypeError, ValueError):
+        return 1.0
+    return max(0.5, min(5.0, round(volume, 2)))
+
+
+@playlist_mutation
+def set_item_volume(playlist_id: str, item_id: str, volume) -> dict | None:
+    data = load_playlist(playlist_id)
+    if data is None:
+        return None
+    for item in data.get("items", []):
+        if item.get("id") == item_id:
+            item["volume"] = clamp_track_volume(volume)
+            save_playlist(data)
+            return item
+    return None
 
 
 @playlist_mutation

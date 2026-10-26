@@ -319,6 +319,21 @@ internal fun MainActivity.trackRow(index: Int, track: Track, songs: LinearLayout
         info.addView(label(track.title, 15f, ink(), false))
         info.addView(lineView(track))
         row.addView(info, LinearLayout.LayoutParams(0, WRAP, 1f))
+        val volChip = TextView(this).apply {
+            text = String.format("×%.1f", track.volume)
+            setTextColor(if (track.volume > 1.01f || track.volume < 0.99f) ink() else soft())
+            textSize = 12f
+            gravity = Gravity.CENTER
+            setPadding(px(6), px(10), px(2), px(10))
+            setOnClickListener {
+                if (index == library.currentTrack && engine.ready) {
+                    engine.trackGain = track.volume
+                    engine.applyVolume()
+                }
+                showVolumeDialog(index, track, this)
+            }
+        }
+        row.addView(volChip)
         row.addView(TextView(this).apply {
             text = "×"
             setTextColor(soft())
@@ -344,6 +359,59 @@ internal fun MainActivity.trackRow(index: Int, track: Track, songs: LinearLayout
             setOnTouchListener { _, event -> dragSong(songs, scroller, row, selected, event) }
         })
         return row
+    }
+
+internal fun MainActivity.showVolumeDialog(index: Int, track: Track, chip: TextView) {
+        val value = TextView(this).apply {
+            text = String.format("×%.1f", track.volume)
+            textSize = 16f
+            gravity = Gravity.CENTER
+            setPadding(0, px(6), 0, px(12))
+        }
+        val seek = SeekBar(this).apply {
+            max = 45 // 0.5 .. 5.0 in 0.1 steps
+            progress = ((track.volume.coerceIn(0.5f, 5f) - 0.5f) * 10f).toInt()
+            setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+                override fun onProgressChanged(bar: SeekBar?, progress: Int, fromUser: Boolean) {
+                    val v = 0.5f + progress / 10f
+                    value.text = String.format("×%.1f", v)
+                    if (index == library.currentTrack && engine.ready) {
+                        engine.trackGain = v
+                        engine.applyVolume()
+                    }
+                }
+                override fun onStartTrackingTouch(bar: SeekBar?) {}
+                override fun onStopTrackingTouch(bar: SeekBar?) {}
+            })
+        }
+        val box = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(px(24), px(4), px(24), 0)
+            addView(value)
+            addView(seek)
+        }
+        AlertDialog.Builder(this)
+            .setTitle("Track volume")
+            .setMessage("${track.title}\n\n0.5 = quieter · 1.0 = original · 5.0 = boost")
+            .setView(box)
+            .setPositiveButton("Save") { _, _ ->
+                val v = 0.5f + seek.progress / 10f
+                library.current().tracks.getOrNull(index)?.volume = v
+                library.save()
+                chip.text = String.format("×%.1f", v)
+                chip.setTextColor(if (v > 1.01f || v < 0.99f) ink() else soft())
+                if (index == library.currentTrack && engine.ready) {
+                    engine.trackGain = v
+                    engine.applyVolume()
+                }
+            }
+            .setNegativeButton("Cancel") { _, _ ->
+                if (index == library.currentTrack && engine.ready) {
+                    engine.trackGain = library.current().tracks.getOrNull(index)?.volume ?: 1f
+                    engine.applyVolume()
+                }
+            }
+            .show()
     }
 
 internal fun MainActivity.dragSong(songs: LinearLayout, scroller: ScrollView, row: View, selected: Int, event: MotionEvent): Boolean {

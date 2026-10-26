@@ -293,9 +293,10 @@ internal fun MainActivity.play(index: Int, seekMs: Int) {
 
 internal fun MainActivity.beginPlay(index: Int, uri: Uri, video: Boolean, seekMs: Int) {
         library.currentTrack = index
+        val gain = library.current().tracks.getOrNull(index)?.volume ?: 1f
         library.positionMs = seekMs
         library.save()
-        if (video && engine.surface == null) engine.queue(uri, seekMs) else engine.play(uri, video, seekMs)
+        if (video && engine.surface == null) engine.queue(uri, seekMs, gain) else engine.play(uri, video, seekMs, gain)
         show()
     }
 

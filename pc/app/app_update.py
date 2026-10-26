@@ -10,7 +10,7 @@ import tempfile
 import threading
 import urllib.request
 
-APP_VERSION = "0.1.0"
+APP_VERSION = "0.1.1"
 LATEST_URL = "https://dragoont.github.io/url-trimmer/latest.json"
 
 

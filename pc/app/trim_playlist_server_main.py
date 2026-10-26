@@ -34,6 +34,12 @@ from pc.server.playlist_server import (
     stop_server,
 )
 
+import pc.server.playlist_server as _playlist_server
+
+# The Tauri shell pipes this process's stdout/stderr. Per-request access logs
+# would keep writing into that pipe forever, so run the headless server quiet.
+_playlist_server.PlaylistHandler.log_message = lambda self, fmt=None, *args: None
+
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Trim Playlist headless server (Tauri shell)")

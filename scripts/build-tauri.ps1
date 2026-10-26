@@ -18,6 +18,24 @@ Set-Location (Join-Path $PSScriptRoot "..")
 Get-Process -Name "TrimPlaylistServer", "Trim Playlist" -ErrorAction SilentlyContinue | Stop-Process -Force
 Start-Sleep -Milliseconds 800
 
+# Delete a folder that may be locked by a running app or a virus-scanner
+# filter: close the processes again and retry before giving up.
+function Remove-TreeRetry([string]$path) {
+  for ($attempt = 1; $attempt -le 6; $attempt++) {
+    Get-Process -Name "TrimPlaylistServer", "Trim Playlist" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+    try {
+      if (Test-Path $path) {
+        Remove-Item -Recurse -Force $path -ErrorAction Stop
+      }
+      return
+    } catch {
+      Write-Host "  $path is locked (attempt $attempt of 6) - close Trim Playlist and wait..."
+      Start-Sleep -Seconds 3
+    }
+  }
+  throw "Could not remove $path. Close Trim Playlist (and its server window) and run the build again."
+}
+
 Write-Host "Installing Python dependencies..."
 python -m pip install -r requirements.txt -r requirements-build.txt
 if ($LASTEXITCODE -ne 0) { exit 1 }
@@ -27,9 +45,7 @@ python -m PyInstaller --clean --noconfirm TrimPlaylistServer.spec
 if ($LASTEXITCODE -ne 0) { exit 1 }
 
 Write-Host "`nStaging the sidecar into src-tauri/resources/server ..."
-if (Test-Path "src-tauri\resources\server") {
-  Remove-Item -Recurse -Force "src-tauri\resources\server"
-}
+Remove-TreeRetry "src-tauri\resources\server"
 New-Item -ItemType Directory -Force "src-tauri\resources\server" | Out-Null
 robocopy "dist\TrimPlaylistServer" "src-tauri\resources\server\TrimPlaylistServer" /E /NFL /NDL /NJH /NJS | Out-Null
 if ($LASTEXITCODE -ge 8) { throw "robocopy failed with exit code $LASTEXITCODE" }
@@ -46,7 +62,7 @@ if ($LASTEXITCODE -ne 0) { exit 1 }
 Write-Host "`nAssembling the portable exe..."
 $release = "src-tauri\target\release"
 $portable = "dist-tauri\TrimPlaylist"
-if (Test-Path "dist-tauri") { Remove-Item -Recurse -Force "dist-tauri" }
+Remove-TreeRetry "dist-tauri"
 New-Item -ItemType Directory -Force "$portable\resources" | Out-Null
 Copy-Item "$release\Trim Playlist.exe" "$portable\Trim Playlist.exe"
 robocopy "src-tauri\resources\server" "$portable\resources\server" /E /NFL /NDL /NJH /NJS | Out-Null

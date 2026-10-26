@@ -388,8 +388,105 @@ async function migrateLocalSession(serverSession) {
   }
 }
 
+// Per-track volume boost (0.5x–5x) routed through a Web Audio gain node, so
+// quiet songs can be amplified past 100%. Works on every platform: PC
+// (WebView2), Android and iOS (Web Audio is available in all of them).
+let audioCtx = null;
+const gainNodes = new WeakMap();
+
+function elementGain(el) {
+  const Ctx = window.AudioContext || window.webkitAudioContext;
+  if (!Ctx) return null;
+  if (!audioCtx) audioCtx = new Ctx();
+  if (audioCtx.state === "suspended") audioCtx.resume().catch(() => {});
+  let gain = gainNodes.get(el);
+  if (!gain) {
+    try {
+      const source = audioCtx.createMediaElementSource(el);
+      gain = audioCtx.createGain();
+      source.connect(gain);
+      gain.connect(audioCtx.destination);
+      gainNodes.set(el, gain);
+    } catch {
+      return null;
+    }
+  }
+  return gain;
+}
+
+function trackVolumeOf(track) {
+  const value = Number(track?.volume);
+  return Number.isFinite(value) ? Math.min(5, Math.max(0.5, value)) : 1;
+}
+
+function applyTrackVolume(track) {
+  const el = mediaElement();
+  if (!el) return;
+  const gain = elementGain(el);
+  if (gain) gain.gain.value = trackVolumeOf(track);
+}
+
+// Per-playlist resume: where each playlist was last playing, so switching to
+// another playlist and back restores the same track at the same time, paused.
+const RESUME_KEY = "trim-playlist-resume";
+
+function loadResumeMap() {
+  try {
+    return JSON.parse(localStorage.getItem(RESUME_KEY) || "{}") || {};
+  } catch {
+    return {};
+  }
+}
+
+function saveResumeEntry(playlistId, entry) {
+  if (!playlistId || !entry?.trackId) return;
+  const map = loadResumeMap();
+  map[playlistId] = { trackId: entry.trackId, time: Math.max(0, Number(entry.time) || 0) };
+  try {
+    localStorage.setItem(RESUME_KEY, JSON.stringify(map));
+  } catch {
+    /* ignore */
+  }
+}
+
+function resumeEntryFor(playlistId) {
+  return loadResumeMap()[playlistId] || null;
+}
+
+// Volume fallback for static hosting (the website demo): when the API is not
+// available, per-track volume lives in localStorage on that device.
+function localVolumeKey(playlistId, trackId) {
+  return `trim-vol:${playlistId}:${trackId}`;
+}
+
+function localVolumeFor(playlistId, trackId) {
+  try {
+    const v = Number(localStorage.getItem(localVolumeKey(playlistId, trackId)));
+    return Number.isFinite(v) && v >= 0.5 && v <= 5 ? v : null;
+  } catch {
+    return null;
+  }
+}
+
+function saveLocalVolume(playlistId, trackId, value) {
+  try {
+    localStorage.setItem(localVolumeKey(playlistId, trackId), String(value));
+  } catch {
+    /* ignore */
+  }
+}
+
+function clearLocalVolume(playlistId, trackId) {
+  try {
+    localStorage.removeItem(localVolumeKey(playlistId, trackId));
+  } catch {
+    /* ignore */
+  }
+}
+
 function saveSession() {
   const payload = sessionPayload();
+  saveResumeEntry(payload.playlistId, { trackId: payload.trackId, time: payload.currentTime });
   pushSessionToServer(payload).catch(() => {
     localStorage.setItem(SESSION_KEY, JSON.stringify({ ...payload, savedAt: Date.now() }));
   });
@@ -522,6 +619,20 @@ async function selectPlaylist(playlistId) {
   renderTracks();
   updateQualityMenu(currentTrack());
   updatePlaylistActions();
+
+  // Coming back to a playlist restores where it was last playing — same track,
+  // same position, paused (autoplays only when the user presses play).
+  if (changed) {
+    const anythingPlaying = allMediaElements().some((el) => el.src && !el.paused);
+    const resume = resumeEntryFor(playlistId);
+    if (resume && !anythingPlaying) {
+      const index = tracks().findIndex((track) => track.id === resume.trackId);
+      if (index >= 0 && !tracks()[index].missing) {
+        await playIndex(index, Number(resume.time) || 0, false);
+      }
+    }
+  }
+
   saveSession();
 }
 
@@ -543,22 +654,67 @@ function renderTracks() {
     row.dataset.index = String(index);
     row.dataset.id = track.id;
     row.dataset.online = String(track.source === 'online');
+    const vol = localVolumeFor(state.currentPlaylistId, track.id) ?? trackVolumeOf(track);
     row.innerHTML = `
       <div class="drag-handle" title="Drag to reorder">${icon("grip")}</div>
-      <div class="track-index">${index + 1}</div>
-      <button type="button" class="track-main">
+      <button type="button" class="track-main" title="${escapeHtml(track.title)}">
         <div class="track-name">${escapeHtml(track.title)}</div>
-        <div class="track-type ${track.missing ? "missing" : ""}">
-          ${track.missing ? "missing · " : ""}${track.source === "online" ? "Online URL" : "Local file"} · ${track.kind || "audio"}
-          ${track.videoHeight ? ` · ${track.videoHeight}p` : ""}
-        </div>
       </button>
       <button type="button" class="remove-btn" title="Remove">${icon("x")}</button>
+      <div class="track-sub">
+        <button type="button" class="vol-btn" title="Track volume (0.5x - 5x)">${vol === 1 ? "×1.0" : `×${vol.toFixed(1)}`}</button>
+        <span class="track-type ${track.missing ? "missing" : ""}">
+          ${track.missing ? "missing · " : ""}${track.source === "online" ? "Online URL" : "Local file"} · ${track.kind || "audio"}
+          ${track.videoHeight ? ` · ${track.videoHeight}p` : ""}
+        </span>
+      </div>
+      <div class="vol-editor" hidden>
+        <input class="vol-range" type="range" min="0.5" max="5" step="0.1" value="${vol}" aria-label="Track volume">
+        <span class="vol-value">×${vol.toFixed(1)}</span>
+      </div>
     `;
 
     row.querySelector(".track-main").addEventListener("click", () => {
       playIndex(Number(row.dataset.index));
     });
+
+    const volBtn = row.querySelector(".vol-btn");
+    const volEditor = row.querySelector(".vol-editor");
+    const volRange = row.querySelector(".vol-range");
+    const volValue = row.querySelector(".vol-value");
+
+    volBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      volEditor.hidden = !volEditor.hidden;
+    });
+
+    const applyVolume = async (raw, save) => {
+      const value = Math.min(5, Math.max(0.5, Number(raw) || 1));
+      volValue.textContent = `×${value.toFixed(1)}`;
+      volBtn.textContent = `×${value.toFixed(1)}`;
+      const live = tracks()[Number(row.dataset.index)];
+      if (live) {
+        live.volume = value;
+        if (Number(row.dataset.index) === state.index) applyTrackVolume(live);
+      }
+      if (!save) return;
+      try {
+        await api(
+          `/api/playlists/${state.currentPlaylistId}/items/${track.id}/volume`,
+          { method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ volume: value }) },
+        );
+        clearLocalVolume(state.currentPlaylistId, track.id); // server value wins again
+      } catch (error) {
+        // Static hosting (the website demo) has no volume API — keep the
+        // value on this device instead of showing an error.
+        saveLocalVolume(state.currentPlaylistId, track.id, value);
+        showToast("Volume saved on this device", "info");
+      }
+    };
+
+    volRange.addEventListener("input", () => void applyVolume(volRange.value, false));
+    volRange.addEventListener("change", () => void applyVolume(volRange.value, true));
+
     row.querySelector(".remove-btn").addEventListener("click", async (e) => {
       e.stopPropagation();
       const ok = await openConfirm({
@@ -741,6 +897,7 @@ async function playIndex(index, seekTime = 0, autoplay = true) {
   const el = track.kind === "video" ? els.video : els.audio;
   el.src = url;
   el.volume = state.volume / 100;
+  applyTrackVolume(track);
 
   els.nowTitle.textContent = track.title;
   const qualityNote =
@@ -934,7 +1091,7 @@ initDropdown({
   },
 });
 
-els.playBtn.addEventListener("click", async () => {
+async function togglePlay() {
   const el = mediaElement();
   if (!el?.src) {
     if (tracks().length) await playIndex(0);
@@ -947,6 +1104,20 @@ els.playBtn.addEventListener("click", async () => {
     el.pause();
     els.audioArt.classList.remove("playing");
   }
+}
+
+els.playBtn.addEventListener("click", togglePlay);
+
+// Spacebar toggles play/pause, like a music player. Ignored while typing in
+// text fields; anywhere else it takes over (no page scroll, no re-clicking a
+// focused button).
+window.addEventListener("keydown", (event) => {
+  if (event.code !== "Space" && event.key !== " ") return;
+  const target = event.target;
+  const tag = target instanceof Element ? target.tagName.toLowerCase() : "";
+  if (tag === "input" || tag === "textarea" || tag === "select" || target.isContentEditable) return;
+  event.preventDefault();
+  void togglePlay();
 });
 
 els.prevBtn.addEventListener("click", () => {

@@ -26,6 +26,7 @@ import android.media.AudioManager
 import android.media.MediaMetadata
 import android.media.MediaMetadataRetriever
 import android.media.MediaPlayer
+import android.media.audiofx.DynamicsProcessing
 import android.media.session.MediaSession
 import android.media.session.PlaybackState
 import android.net.Uri
@@ -379,7 +380,10 @@ class MainActivity : Activity() {
         var surface: Surface? = null
         var ready = false
         var volume = 1f
+        var trackGain = 1f
+        private var dp: DynamicsProcessing? = null
         private var queued: Pair<Uri, Int>? = null
+        private var queuedGain = 1f
         private var videoMode = false
         var onChange: (() -> Unit)? = null
         private val focusRequest = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN)
@@ -391,7 +395,7 @@ class MainActivity : Activity() {
             surface?.release()
             surface = next
             if (videoMode && ready) try { player.setSurface(next) } catch (_: IllegalStateException) {}
-            queued?.let { (uri, seek) -> queued = null; play(uri, true, seek) }
+            queued?.let { (uri, seek) -> queued = null; play(uri, true, seek, queuedGain) }
         }
 
         fun detach() {
@@ -400,9 +404,10 @@ class MainActivity : Activity() {
             surface = null
         }
 
-        fun queue(uri: Uri, seekMs: Int) { queued = uri to seekMs; videoMode = true }
+        fun queue(uri: Uri, seekMs: Int, gain: Float) { queued = uri to seekMs; queuedGain = gain; videoMode = true }
 
-        fun play(uri: Uri, video: Boolean, seekMs: Int) {
+        fun play(uri: Uri, video: Boolean, seekMs: Int, gain: Float = trackGain) {
+            trackGain = gain.coerceIn(0.5f, 5f)
             val current = ++token
             ready = false
             videoMode = video
@@ -446,8 +451,45 @@ class MainActivity : Activity() {
         fun position() = try { if (ready) player.currentPosition else library.positionMs } catch (_: IllegalStateException) { 0 }
         fun duration() = try { if (ready) player.duration.coerceAtLeast(0) else 0 } catch (_: IllegalStateException) { 0 }
         fun playing() = try { ready && player.isPlaying } catch (_: IllegalStateException) { false }
-        fun applyVolume() { if (ready) try { player.setVolume(volume, volume) } catch (_: IllegalStateException) {} }
-        fun release() { token += 1; surface?.release(); surface = null; player.release() }
+        fun applyVolume() {
+            if (!ready) return
+            val effective = (volume * trackGain).coerceIn(0.5f, 5f)
+            val base = effective.coerceAtMost(1f)
+            try { player.setVolume(base, base) } catch (_: IllegalStateException) {}
+            applyBoost(effective)
+        }
+
+        // Boost past 100% with DynamicsProcessing (Android 9+). Lower Android
+        // versions and the standard player volume cap at 1.0.
+        private fun applyBoost(effective: Float) {
+            val db = if (effective > 1.001f) 20f * kotlin.math.log10(effective) else 0f
+            if (db <= 0.01f) {
+                dp?.release()
+                dp = null
+                return
+            }
+            if (Build.VERSION.SDK_INT < Build.VERSION_CODES.P) return
+            try {
+                dp?.release()
+                dp = null
+                val config = DynamicsProcessing.Config.Builder(
+                    DynamicsProcessing.VARIANT_FAVOR_FREQUENCY_RESOLUTION,
+                    2, // stereo
+                    false, 0, // pre-EQ
+                    false, 0, // MBC
+                    false, 0, // post-EQ
+                    false, // limiter
+                )
+                    .setInputGainAllChannelsTo(db)
+                    .build()
+                val dpNew = DynamicsProcessing(0, player.audioSessionId, config)
+                dpNew.setEnabled(true)
+                dp = dpNew
+            } catch (_: Exception) {
+                dp = null
+            }
+        }
+        fun release() { token += 1; surface?.release(); surface = null; dp?.release(); dp = null; player.release() }
         private fun audioAttributes() = AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_MEDIA).setContentType(AudioAttributes.CONTENT_TYPE_MUSIC).build()
     }
 

@@ -76,11 +76,17 @@ fn spawn_server(app: &tauri::AppHandle) {
   if let Some(stdout) = child.stdout.take() {
     let app = app.clone();
     thread::spawn(move || {
+      // Drain stdout forever: the server logs every request here, and an
+      // undrained pipe fills up and freezes the whole Python process.
       for line in BufReader::new(stdout).lines().map_while(Result::ok) {
         if let Some(url) = line.strip_prefix("TRIM_SERVER_READY url=") {
           let state = app.state::<ServerState>();
-          *state.url.lock().unwrap_or_else(|e| e.into_inner()) = Some(url.to_string());
-          break;
+          let mut slot = state.url.lock().unwrap_or_else(|e| e.into_inner());
+          if slot.is_none() {
+            *slot = Some(url.to_string());
+          }
+        } else if !line.is_empty() {
+          eprintln!("[trim-server] {line}");
         }
       }
     });

@@ -68,6 +68,107 @@ if(websiteHome) websiteHome.href=exampleHome();
 function selectView(view){const url=view==='url';app.classList.toggle('url-view',url);panel.hidden=!url;if(url)refreshCookies();document.querySelector('#appTitle').textContent=url?'Trim URL':'Trim Playlist';document.title=url?'Trim URL':'Trim Playlist';menu.hidden=true;switchButton.setAttribute('aria-expanded','false');}
 switchButton.onclick=()=>{menu.hidden=!menu.hidden;switchButton.setAttribute('aria-expanded',String(!menu.hidden));};
 menu.querySelectorAll('[data-view]').forEach(button=>button.onclick=()=>selectView(button.dataset.view));
+
+const APP_VERSION = '0.1.1';
+
+function newerVersion(remote, local) {
+  const a = String(remote).split('.').map(Number);
+  const b = String(local).split('.').map(Number);
+  for (let i = 0; i < 3; i++) {
+    if ((a[i] || 0) !== (b[i] || 0)) return (a[i] || 0) > (b[i] || 0);
+  }
+  return false;
+}
+
+function checkForUpdate() {
+  const box = document.createElement('div');
+  box.style.cssText = 'display:flex;flex-direction:column;gap:8px;font-size:13px;align-items:center;padding:8px 0;';
+  const status = document.createElement('div');
+  status.textContent = 'Checking for updates...';
+  box.appendChild(status);
+  openModal('Check for update', box);
+  fetch('https://dragoont.github.io/url-trimmer/latest.json', { cache: 'no-store' })
+    .then((r) => r.json())
+    .then((info) => {
+      const remote = String(info.version || '');
+      if (newerVersion(remote, APP_VERSION)) {
+        status.innerHTML = `A new version is available: <b>v${remote}</b>`;
+        const link = document.createElement('a');
+        link.href = info.notes || 'https://github.com/DragoonT/url-trimmer/releases';
+        link.target = '_blank';
+        link.rel = 'noreferrer';
+        link.style.cssText = 'color:var(--brand)';
+        link.textContent = 'See what changed and download';
+        box.appendChild(link);
+      } else {
+        status.textContent = `You're up to date (v${APP_VERSION})`;
+      }
+    })
+    .catch(() => {
+      status.textContent = "Couldn't check for updates. Connect to the internet and try again.";
+    });
+}
+
+// Settings: light/dark theme, stored per device (accent stays brand blue).
+const settingsButton=document.querySelector('#menuSettings');
+if(settingsButton) settingsButton.onclick=()=>{
+  menu.hidden=true;switchButton.setAttribute('aria-expanded','false');
+  const isDark=document.documentElement.classList.contains('dark');
+  const themeRow=document.createElement('div');
+  themeRow.style.cssText='display:flex;align-items:center;justify-content:space-between;gap:12px;padding:4px 2px;';
+  const themeLabel=document.createElement('label');themeLabel.textContent='Theme';themeLabel.style.fontSize='13px';
+  const select=document.createElement('select');
+  select.style.cssText='background:var(--background);color:var(--foreground);border:1px solid var(--border);border-radius:8px;padding:4px 8px;';
+  [['dark','Dark'],['light','Light']].forEach(([v,t])=>{const o=document.createElement('option');o.value=v;o.textContent=t;select.appendChild(o);});
+  select.value=isDark?'dark':'light';
+  select.onchange=()=>{
+    const light=select.value==='light';
+    document.documentElement.classList.toggle('dark',!light);
+    try{localStorage.setItem('trim-theme',select.value)}catch(e){}
+  };
+  themeRow.appendChild(themeLabel);themeRow.appendChild(select);
+  const updateRow=document.createElement('div');
+  updateRow.style.cssText='display:flex;justify-content:center;padding:2px 0;';
+  const check=document.createElement('button');
+  check.className='btn btn-ghost';
+  check.textContent='Check for update';
+  check.onclick=()=>{overlay.remove();checkForUpdate();};
+  updateRow.appendChild(check);
+  const box=document.createElement('div');
+  box.style.cssText='display:flex;flex-direction:column;gap:8px;';
+  box.appendChild(themeRow);box.appendChild(updateRow);
+  openModal('Settings',box);
+};
+
+// About: version + GitHub.
+const aboutButton=document.querySelector('#menuAbout');
+if(aboutButton) aboutButton.onclick=()=>{
+  menu.hidden=true;switchButton.setAttribute('aria-expanded','false');
+  const box=document.createElement('div');
+  box.style.cssText='display:flex;flex-direction:column;gap:8px;font-size:13px;';
+  box.innerHTML='<div><b>Trim Playlist</b> v'+APP_VERSION+'</div>'
+    +'<div style="color:var(--muted-fg)">Keep a playlist and download or trim a video URL.</div>'
+    +'<div>GitHub: <a href="https://github.com/DragoonT/url-trimmer" target="_blank" rel="noreferrer" style="color:var(--brand)">github.com/DragoonT/url-trimmer</a></div>';
+  openModal('About',box);
+};
+
+function openModal(title, contentNode){
+  const overlay=document.createElement('div');
+  overlay.className='modal-overlay';
+  overlay.style.display='flex';
+  const modal=document.createElement('div');
+  modal.className='modal';
+  const head=document.createElement('div');
+  head.style.cssText='display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;';
+  const h=document.createElement('b');h.textContent=title;
+  const close=document.createElement('button');close.className='btn btn-ghost';close.textContent='✕';
+  close.onclick=()=>overlay.remove();
+  head.appendChild(h);head.appendChild(close);
+  modal.appendChild(head);modal.appendChild(contentNode);
+  overlay.appendChild(modal);
+  overlay.onclick=(e)=>{if(e.target===overlay)overlay.remove();};
+  document.body.appendChild(overlay);
+}
 document.addEventListener('click',event=>{if(!event.target.closest('.app-switch')){menu.hidden=true;switchButton.setAttribute('aria-expanded','false');}});
 panel.querySelector('#downloadClose').onclick=()=>selectView('playlist');
 function updateDownloadType(){

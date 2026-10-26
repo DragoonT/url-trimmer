@@ -1,7 +1,7 @@
 {
   "name": "trim-playlist-desktop",
   "private": true,
-  "version": "0.3.2",
+  "version": "0.1.1",
   "scripts": {
     "tauri": "tauri",
     "tauri:dev": "tauri dev",

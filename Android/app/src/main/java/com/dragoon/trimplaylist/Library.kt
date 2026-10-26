@@ -9,6 +9,7 @@ data class Track(
     val uri: String,
     val kind: String,
     val video: Boolean,
+    var volume: Float = 1f,
 )
 
 data class Playlist(
@@ -43,7 +44,8 @@ class Library(context: Context) {
                         .put("title", track.title)
                         .put("uri", track.uri)
                         .put("kind", track.kind)
-                        .put("video", track.video),
+                        .put("video", track.video)
+                        .put("volume", track.volume.toDouble()),
                 )
             }
             list.put(JSONObject().put("name", playlist.name).put("tracks", tracks))
@@ -92,6 +94,7 @@ class Library(context: Context) {
                     uri = track.optString("uri"),
                     kind = track.optString("kind", "file"),
                     video = track.optBoolean("video"),
+                    volume = track.optDouble("volume", 1.0).toFloat().coerceIn(0.5f, 5f),
                 )
             }
             playlists += Playlist(item.optString("name", "Playlist"), tracks)

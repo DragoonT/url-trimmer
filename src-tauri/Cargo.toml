@@ -1,6 +1,6 @@
 [package]
 name = "trim-playlist"
-version = "0.3.2"
+version = "0.1.1"
 description = "Trim Playlist — keep a playlist, download or trim a video URL"
 edition = "2021"
 

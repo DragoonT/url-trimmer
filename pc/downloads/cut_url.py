@@ -159,6 +159,8 @@ def clean_url(url: str, platform: str) -> str:
 
 VIDEO_QUALITIES: dict[str, tuple[str, int | None]] = {
     "best": ("Best available", None),
+    "2160": ("2160p", 2160),
+    "1440": ("1440p", 1440),
     "1080": ("1080p", 1080),
     "720": ("720p", 720),
     "480": ("480p", 480),
@@ -1012,8 +1014,8 @@ Without --mode or --quality, interactive menus are shown.
     parser.add_argument(
         "--quality",
         "-q",
-        choices=["best", "1080", "720", "480", "360", "320", "192", "128"],
-        help="Download quality: MP4=1080/720/480/360/best, MP3=320/192/128/best",
+        choices=["best", "2160", "1440", "1080", "720", "480", "360", "320", "192", "128"],
+        help="Download quality: MP4=2160/1440/1080/720/480/360/best, MP3=320/192/128/best",
     )
     parser.add_argument(
         "--format",

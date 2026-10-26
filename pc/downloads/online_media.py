@@ -36,7 +36,7 @@ def resolve_stream(item, quality='original'):
     cookie = download_cookie_path({'cookies': item.get('cookies', '')})
     mode = item.get('kind', 'video')
     quality = str(quality)
-    if quality not in ('', 'original', 'best', '1080', '720', '480', '360'):
+    if quality not in ('', 'original', 'best', '2160', '1440', '1080', '720', '480', '360'):
         quality = 'original'
     key = (item['url'], mode, quality, str(cookie), cookie.stat().st_mtime_ns if cookie else 0)
     with _lock:
@@ -47,10 +47,15 @@ def resolve_stream(item, quality='original'):
         if mode == 'audio':
             media_format = 'bestaudio[ext=m4a][protocol=https]/bestaudio[protocol=https]/bestaudio[protocol=http]'
         elif quality.isdigit():
-            # Do not silently downgrade a requested quality. Browser playback
-            # needs one stream containing both video and audio; many platforms
-            # provide 1080p only as two separate adaptive streams.
-            media_format = f'bestvideo[height={quality}][vcodec^=avc1][protocol=https]+bestaudio[acodec^=mp4a][protocol=https]/best[height={quality}][acodec!=none][vcodec!=none][protocol=https]'
+            # Do not silently downgrade a requested quality. H.264 first (plays
+            # everywhere); platforms only ship above 1080p as VP9/AV1, so fall
+            # back to any codec — the server muxes both streams into a playable
+            # fragmented MP4 with ffmpeg.
+            media_format = (
+                f'bestvideo[height={quality}][vcodec^=avc1][protocol=https]+bestaudio[acodec^=mp4a][protocol=https]/'
+                f'bestvideo[height={quality}][protocol=https]+bestaudio[protocol=https]/'
+                f'best[height={quality}][acodec!=none][vcodec!=none][protocol=https]'
+            )
         else:
             media_format = 'best[ext=mp4][vcodec^=avc1][protocol=https]/best[ext=mp4][protocol=https]/best[protocol=https]/best[protocol=http]'
         options = {'quiet': True, 'noplaylist': True, 'playlist_items': '1',
