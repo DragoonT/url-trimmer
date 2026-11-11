@@ -15,7 +15,17 @@ import java.nio.ByteBuffer
 /** Saves a direct file or a YouTube video onto this phone and reports 0–1 progress. */
 object PhoneDownload {
     private const val CHROME = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
-    data class Item(val title: String, val url: String, val ext: String, val video: Boolean, val audioUrl: String? = null, val fallbackUrl: String? = null)
+    data class Item(
+        val title: String,
+        val url: String,
+        val ext: String,
+        val video: Boolean,
+        val audioUrl: String? = null,
+        val fallbackUrl: String? = null,
+        val artist: String = "",
+        val durationMs: Int = 0,
+        val thumbUrl: String = "",
+    )
 
     fun items(pageUrl: String, audio: Boolean, maxHeight: Int, cookie: String?): List<Item> {
         val list = Regex("[?&]list=([A-Za-z0-9_-]+)").find(pageUrl)?.groupValues?.get(1)
@@ -49,6 +59,54 @@ object PhoneDownload {
         // Keep Online as a direct stream (not a saved remux). Prefer progressive MP4
         // so MediaPlayer can keep playing without mid-stream adaptive failures.
         return stream(id, audio, 0, cookie, split = false).url
+    }
+
+    data class Info(val title: String, val artist: String, val durationMs: Int, val thumbUrl: String)
+
+    /** Title, channel, duration, and thumbnail for Online rows (YouTube page URLs). */
+    fun info(pageUrl: String, cookie: String?): Info {
+        val youtube = pageUrl.contains("youtube.com") || pageUrl.contains("youtu.be")
+        if (!youtube) {
+            val name = pageUrl.substringBefore('?').substringAfterLast('/').ifBlank { "Online" }
+            return Info(name, "Online", 0, "")
+        }
+        val id = videoId(pageUrl) ?: error("That YouTube link has no video")
+        val body = """{"videoId":"$id","context":{"client":{"clientName":"ANDROID","clientVersion":"20.10.38","androidSdkVersion":30,"hl":"en","gl":"US"}}}"""
+        val headers = mapOf("User-Agent" to "com.google.android.youtube/20.10.38 (Linux; U; Android 11) gzip")
+        val player = "https://www.youtube.com/youtubei/v1/player?prettyPrint=false"
+        var text = post(player, body, null, headers)
+        var root = JSONObject(text)
+        var status = root.optJSONObject("playabilityStatus")?.optString("status").orEmpty()
+        if (status == "LOGIN_REQUIRED" && !cookie.isNullOrBlank()) {
+            text = post(player, body, cookie, headers)
+            root = JSONObject(text)
+            status = root.optJSONObject("playabilityStatus")?.optString("status").orEmpty()
+        }
+        val details = root.optJSONObject("videoDetails")
+        val title = details?.optString("title").orEmpty().ifBlank { id }
+        val artist = details?.optString("author").orEmpty().ifBlank { "YouTube" }
+        val durationMs = (details?.optString("lengthSeconds")?.toIntOrNull() ?: 0).coerceAtLeast(0) * 1000
+        val thumbUrl = thumbnailUrl(details, id)
+        return Info(title, artist, durationMs, thumbUrl)
+    }
+
+    private fun thumbnailUrl(details: JSONObject?, id: String): String {
+        val rows = details?.optJSONObject("thumbnail")?.optJSONArray("thumbnails")
+        var best = ""
+        var bestArea = 0
+        if (rows != null) {
+            for (i in 0 until rows.length()) {
+                val item = rows.optJSONObject(i) ?: continue
+                val url = item.optString("url")
+                if (url.isBlank()) continue
+                val area = item.optInt("width") * item.optInt("height")
+                if (area >= bestArea) {
+                    bestArea = area
+                    best = url
+                }
+            }
+        }
+        return best.ifBlank { "https://i.ytimg.com/vi/$id/hqdefault.jpg" }
     }
 
     private fun videoId(url: String) = Regex("(?:v=|youtu\\.be/|shorts/|embed/)([A-Za-z0-9_-]{11})").find(url)?.groupValues?.get(1)
@@ -117,7 +175,11 @@ object PhoneDownload {
         }
         val playability = root.optJSONObject("playabilityStatus")
         if (playability != null && status != "OK") error(playability.optString("reason").ifBlank { "YouTube did not allow this video" })
-        val title = root.optJSONObject("videoDetails")?.optString("title").orEmpty().ifBlank { id }
+        val details = root.optJSONObject("videoDetails")
+        val title = details?.optString("title").orEmpty().ifBlank { id }
+        val artist = details?.optString("author").orEmpty()
+        val durationMs = (details?.optString("lengthSeconds")?.toIntOrNull() ?: 0).coerceAtLeast(0) * 1000
+        val thumb = thumbnailUrl(details, id)
         val streaming = root.optJSONObject("streamingData") ?: error("YouTube did not give a file for $title")
         val combined = runCatching { pickVideo(streaming, maxHeight).optString("url") }.getOrNull()?.takeIf { it.isNotBlank() }
         if (!audio && split) {
@@ -125,7 +187,7 @@ object PhoneDownload {
             val sound = runCatching { pickAudio(streaming) }.getOrNull()
             if (picture != null && sound != null) {
                 val height = picture.optInt("height")
-                return Item("$title · ${height}p", picture.optString("url"), "mp4", true, sound.optString("url"), combined)
+                return Item("$title · ${height}p", picture.optString("url"), "mp4", true, sound.optString("url"), combined, artist, durationMs, thumb)
             }
         }
         val chosen = if (audio) {
@@ -140,7 +202,20 @@ object PhoneDownload {
             else -> "mp4"
         }
         val address = chosen.optString("url")
-        return Item(title, address, ext, !audio, fallbackUrl = combined?.takeIf { it != address })
+        return Item(title, address, ext, !audio, fallbackUrl = combined?.takeIf { it != address }, artist = artist, durationMs = durationMs, thumbUrl = thumb)
+    }
+
+    /** Saves a remote thumbnail next to downloads so Offline/Online art still shows without streaming the page again. */
+    fun saveThumb(dir: File, title: String, thumbUrl: String): String {
+        if (thumbUrl.isBlank()) return ""
+        return try {
+            dir.mkdirs()
+            val file = unique(dir, "$title cover", "jpg")
+            fetchTo(file, thumbUrl, null) { }
+            file.toURI().toString()
+        } catch (_: Exception) {
+            thumbUrl
+        }
     }
 
     private fun pickHighVideo(streaming: JSONObject, maxHeight: Int): JSONObject? {

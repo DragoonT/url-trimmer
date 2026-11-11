@@ -157,6 +157,8 @@ internal fun MainActivity.addOnline(entries: List<Pair<String, String>>) {
             library.current().tracks += Track(title, page, "online", video)
         }
         library.save()
+        // Load channel, duration, and thumbnail in the background for Online rows.
+        library.current().tracks.takeLast(entries.size).forEach { ensureMeta(it) }
         onlineChoices.clear()
         onlinePicked.clear()
         if (history.lastOrNull() == Page.ONLINE && history.size > 1) history.removeLast()

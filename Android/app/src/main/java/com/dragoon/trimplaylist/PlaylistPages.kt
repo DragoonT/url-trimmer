@@ -113,7 +113,8 @@ internal fun MainActivity.detailPage(): View {
         top.addView(ghost("⋮") { playlistMenu(library.selected) })
         root.addView(top)
         val head = row().apply { setPadding(0, px(8), 0, px(12)) }
-        head.addView(RecordView(this).apply { layoutParams = LinearLayout.LayoutParams(px(108), px(108)) })
+        val coverTrack = playlist.tracks.getOrNull(library.currentTrack) ?: playlist.tracks.firstOrNull()
+        head.addView(artView(coverTrack, px(108), px(108)))
         val titles = column(px(14), 0, 0, 0)
         titles.addView(label(playlist.name, 26f, ink(), true))
         titles.addView(muted("Playlist · ${playlist.tracks.size} songs"))
@@ -185,7 +186,17 @@ internal fun MainActivity.addDownload() {
                         track.kind == "online" && track.title.substringBefore(" · ").equals(title, true)
                     }
                     val local = Track(title, path, "file", Library.looksLikeVideo(name))
-                    if (onlineMatch >= 0) tracks[onlineMatch] = local else tracks += local
+                    if (onlineMatch >= 0) {
+                        // Keep Online artist/thumb when replacing with the downloaded file.
+                        val previous = tracks[onlineMatch]
+                        local.artist = previous.artist
+                        local.durationMs = previous.durationMs
+                        local.thumb = previous.thumb
+                        tracks[onlineMatch] = local
+                    } else {
+                        tracks += local
+                    }
+                    ensureMeta(local)
                 }
                 library.save()
                 toast("Using files from Download/TrimPlaylist/")
@@ -323,7 +334,7 @@ internal fun MainActivity.trackRow(index: Int, track: Track, songs: LinearLayout
             if (index == library.currentTrack) setBackgroundColor(selected)
             setOnClickListener { play(songs.indexOfChild(this).coerceAtLeast(0), 0) }
         }
-        row.addView(RecordView(this).apply { layoutParams = LinearLayout.LayoutParams(px(46), px(46)) })
+        row.addView(artView(track, px(46), px(46)))
         val info = column(px(10), 0, 0, 0)
         info.addView(label(track.title, 15f, ink(), false))
         info.addView(lineView(track))

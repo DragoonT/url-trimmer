@@ -492,8 +492,17 @@ internal fun MainActivity.beginDownload(pages: List<String>, trimming: Boolean, 
                     }
                     reportDownload("Saving ${item.title} · $place", 0.99f)
                     val title = item.title.substringBefore(" · ").ifBlank { file.nameWithoutExtension }
+                    val savedThumb = saveDownloadThumb(title, item.thumbUrl)
                     val (uri, path) = publishToTrimPlaylist(file)
-                    val local = Track(title, uri.toString(), "file", item.video || Library.looksLikeVideo(file.name))
+                    val local = Track(
+                        title = title,
+                        uri = uri.toString(),
+                        kind = "file",
+                        video = item.video || Library.looksLikeVideo(file.name),
+                        artist = item.artist,
+                        durationMs = item.durationMs,
+                        thumb = savedThumb.ifBlank { item.thumbUrl },
+                    )
                     saved += local to path
                     reportDownload("Saved $path", 1f)
                 }
@@ -510,6 +519,19 @@ internal fun MainActivity.beginDownload(pages: List<String>, trimming: Boolean, 
                 downloadBusy = false
             }
         }.start()
+    }
+
+internal fun MainActivity.saveDownloadThumb(title: String, thumbUrl: String): String {
+        if (thumbUrl.isBlank()) return ""
+        return try {
+            val staged = PhoneDownload.saveThumb(stagingDownloadDir(), title, thumbUrl)
+            if (!staged.startsWith("file:")) return staged
+            val thumbFile = File(Uri.parse(staged).path ?: return staged)
+            if (!thumbFile.exists()) return staged
+            publishToTrimPlaylist(thumbFile).first.toString()
+        } catch (_: Exception) {
+            thumbUrl
+        }
     }
 
 internal fun MainActivity.offerDownloadedTracks(saved: List<Pair<Track, String>>) {

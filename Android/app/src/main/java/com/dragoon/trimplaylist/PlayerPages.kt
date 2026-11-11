@@ -86,8 +86,9 @@ internal fun MainActivity.playerPage(): View {
             videoHost = videoFrame(px(280))
             root.addView(videoHost, LinearLayout.LayoutParams(MATCH, px(280)).apply { topMargin = px(12) })
         } else {
-            val art = RecordView(this)
-            root.addView(art, LinearLayout.LayoutParams(MATCH, px(280)).apply { topMargin = px(12) })
+            root.addView(artView(track, MATCH, px(280)).apply {
+                layoutParams = (layoutParams as LinearLayout.LayoutParams).apply { topMargin = px(12) }
+            })
         }
         root.addView(spaceH(18))
         root.addView(label(track?.title ?: "Select a track", 22f, ink(), true))
@@ -220,7 +221,7 @@ internal fun MainActivity.refreshMini() {
             setPadding(px(10), px(8), px(10), px(8))
             setOnClickListener { open(Page.PLAYER) }
         }
-        bar.addView(RecordView(this).apply { layoutParams = LinearLayout.LayoutParams(px(42), px(42)) })
+        bar.addView(artView(track, px(42), px(42)))
         val text = column(px(10), 0, 0, 0)
         miniTitle = label(track.title, 14f, ink(), false)
         text.addView(miniTitle)
@@ -439,6 +440,15 @@ internal fun MainActivity.lineView(track: Track): TextView {
         return view
     }
 
+internal fun MainActivity.artView(track: Track?, w: Int, h: Int): RecordView {
+        val view = RecordView(this).apply { layoutParams = LinearLayout.LayoutParams(w, h) }
+        if (track == null || track.uri.isBlank()) return view
+        artCache[track.uri]?.let { view.art = it }
+        artViews.add(track.uri to view)
+        ensureMeta(track)
+        return view
+    }
+
 internal fun MainActivity.trackLine(track: Track): String {
         val known = metaCache[track.uri]
         if (known == null) ensureMeta(track)
@@ -446,8 +456,10 @@ internal fun MainActivity.trackLine(track: Track): String {
     }
 
 internal fun MainActivity.formatMeta(track: Track, known: Meta?): String {
-        val artist = known?.artist ?: guessArtist(track.title)
-        val stored = known?.durationMs ?: 0
+        val artist = known?.artist?.takeIf { it.isNotBlank() }
+            ?: track.artist.takeIf { it.isNotBlank() }
+            ?: guessArtist(track.title)
+        val stored = known?.durationMs?.takeIf { it > 0 } ?: track.durationMs
         val duration = if (stored > 0) stored else if (sameTrack(track)) engine.duration() else 0
         return if (duration > 0) "$artist · ${formatTime(duration)}" else artist
     }
@@ -466,24 +478,97 @@ internal fun MainActivity.guessArtist(title: String): String {
     }
 
 internal fun MainActivity.ensureMeta(track: Track) {
-        if (track.uri.isBlank() || metaLoading.contains(track.uri) || metaCache.containsKey(track.uri)) return
+        if (track.uri.isBlank() || metaLoading.contains(track.uri)) return
+        if (metaCache[track.uri] == null && (track.artist.isNotBlank() || track.durationMs > 0 || track.thumb.isNotBlank())) {
+            metaCache[track.uri] = Meta(track.artist.ifBlank { guessArtist(track.title) }, track.durationMs, track.thumb)
+        }
+        val cached = metaCache[track.uri]
+        if (cached != null && artCache.containsKey(track.uri)) return
+        if (cached != null && track.thumb.isBlank() && cached.thumbUrl.isBlank() && track.kind != "online" && !track.uri.startsWith("content:") && !track.uri.startsWith("file:")) return
         metaLoading.add(track.uri)
         thread(name = "track-meta") {
-            val loaded = readMeta(track)
-            runOnUiThread {
-                metaCache[track.uri] = loaded
-                val line = formatMeta(track, loaded)
-                metaLabels.filter { it.first == track.uri && it.second.isAttachedToWindow }.forEach { it.second.text = line }
-                if (sameTrack(track)) {
-                    playerArtist?.text = line
-                    syncSession(true)
+            try {
+                val loaded = if (cached != null && track.kind != "online") cached else readMeta(track)
+                val art = loadArtBitmap(track, loaded)
+                runOnUiThread {
+                    metaCache[track.uri] = loaded
+                    if (art != null) artCache[track.uri] = art
+                    applyTrackMeta(track, loaded)
+                    val line = formatMeta(track, loaded)
+                    metaLabels.filter { it.first == track.uri && it.second.isAttachedToWindow }.forEach { it.second.text = line }
+                    artViews.filter { it.first == track.uri && it.second.isAttachedToWindow }.forEach { it.second.art = artCache[track.uri] ?: art }
+                    if (sameTrack(track)) {
+                        playerArtist?.text = line
+                        syncSession(true)
+                    }
                 }
+            } finally {
+                runOnUiThread { metaLoading.remove(track.uri) }
             }
         }
     }
 
+internal fun MainActivity.applyTrackMeta(track: Track, loaded: Meta) {
+        var changed = false
+        if (loaded.artist.isNotBlank() && track.artist != loaded.artist) {
+            track.artist = loaded.artist
+            changed = true
+        }
+        if (loaded.durationMs > 0 && track.durationMs != loaded.durationMs) {
+            track.durationMs = loaded.durationMs
+            changed = true
+        }
+        if (loaded.thumbUrl.isNotBlank() && track.thumb != loaded.thumbUrl) {
+            track.thumb = loaded.thumbUrl
+            changed = true
+        }
+        if (changed) library.save()
+    }
+
+internal fun MainActivity.loadArtBitmap(track: Track, loaded: Meta): Bitmap? {
+        artCache[track.uri]?.let { return it }
+        val sources = listOf(track.thumb, loaded.thumbUrl).filter { it.isNotBlank() }.distinct()
+        for (source in sources) {
+            decodeArt(source)?.let { return it }
+        }
+        return null
+    }
+
+internal fun MainActivity.decodeArt(source: String): Bitmap? = try {
+        when {
+            source.startsWith("content:") || source.startsWith("file:") -> {
+                contentResolver.openInputStream(Uri.parse(source))?.use { android.graphics.BitmapFactory.decodeStream(it) }
+            }
+            source.startsWith("/") -> android.graphics.BitmapFactory.decodeFile(source)
+            source.startsWith("http://") || source.startsWith("https://") -> {
+                val connection = URL(source).openConnection() as java.net.HttpURLConnection
+                connection.connectTimeout = 12000
+                connection.readTimeout = 12000
+                connection.setRequestProperty("User-Agent", "Mozilla/5.0")
+                connection.inputStream.use { android.graphics.BitmapFactory.decodeStream(it) }.also { connection.disconnect() }
+            }
+            else -> null
+        }
+    } catch (_: Exception) {
+        null
+    }
+
 internal fun MainActivity.readMeta(track: Track): Meta {
-        val guess = guessArtist(track.title)
+        val guess = track.artist.takeIf { it.isNotBlank() } ?: guessArtist(track.title)
+        val youtube = track.kind == "online" && (track.uri.contains("youtube.com") || track.uri.contains("youtu.be"))
+        if (youtube) {
+            return try {
+                val cookie = authCookieHeader("www.youtube.com")
+                val info = PhoneDownload.info(track.uri, cookie)
+                Meta(
+                    artist = info.artist.ifBlank { guess },
+                    durationMs = info.durationMs.takeIf { it > 0 } ?: track.durationMs,
+                    thumbUrl = info.thumbUrl.ifBlank { track.thumb },
+                )
+            } catch (_: Exception) {
+                Meta(guess, track.durationMs, track.thumb)
+            }
+        }
         return try {
             val retriever = MediaMetadataRetriever()
             val uri = Uri.parse(track.uri)
@@ -496,11 +581,21 @@ internal fun MainActivity.readMeta(track: Track): Meta {
             val artist = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ARTIST)?.takeIf { it.isNotBlank() }
                 ?: retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_ALBUMARTIST)?.takeIf { it.isNotBlank() }
                 ?: guess
-            val duration = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toIntOrNull() ?: 0
+            val duration = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toIntOrNull()
+                ?: track.durationMs
+            val embedded = retriever.embeddedPicture
             retriever.release()
-            Meta(artist, duration)
+            var thumb = track.thumb
+            if (embedded != null) {
+                val bitmap = android.graphics.BitmapFactory.decodeByteArray(embedded, 0, embedded.size)
+                if (bitmap != null) {
+                    artCache[track.uri] = bitmap
+                    if (thumb.isBlank()) thumb = "embedded:${track.uri}"
+                }
+            }
+            Meta(artist, duration, thumb)
         } catch (_: Exception) {
-            Meta(guess, 0)
+            Meta(guess, track.durationMs, track.thumb)
         }
     }
 

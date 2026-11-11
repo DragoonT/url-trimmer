@@ -7,7 +7,7 @@ This build is the folder `dist/TrimPlaylist`. That folder contains only this bui
 - `Windows/TrimPlaylist-Setup.exe` — the Windows installer. After setup, open **Trim Playlist** from the Start menu.
 - `Windows/TrimPlaylist-Windows.zip` — Windows. Unzip it and open **Trim Playlist** inside the `TrimPlaylist` folder.
 - `Linux/TrimPlaylist-Linux.tar.gz` — Linux. Unpack it and run `start.sh` inside the `TrimPlaylist` folder. Install `libgtk-3-0` and `libwebkit2gtk-4.1-0` on Debian or Ubuntu first.
-- `Android/TrimPlaylist-Android.apk` — Android, version 0.1.1.
+- `Android/TrimPlaylist-Android.apk` — Android, version 0.1.2.
 - `iOS/TrimPlaylist-iOS.ipa` — iPhone and iPad, version 0.1.0.
 - `Other-OS/TrimPlaylist-Other-OS.zip` — Other OS. On a Mac, install Python 3 and run `pc/start-macos.command`. On NixOS, run `nix develop`, then `python pc/app/trim_playlist_app.py`.
 

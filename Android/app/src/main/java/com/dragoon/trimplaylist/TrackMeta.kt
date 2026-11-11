@@ -65,5 +65,5 @@ import kotlin.concurrent.thread
 import org.json.JSONObject
 
 
-internal data class Meta(val artist: String, val durationMs: Int)
+internal data class Meta(val artist: String, val durationMs: Int, val thumbUrl: String = "")
 

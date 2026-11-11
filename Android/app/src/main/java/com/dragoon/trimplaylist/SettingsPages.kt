@@ -312,6 +312,8 @@ internal fun MainActivity.ensureChannel() {
     }
 
 internal fun MainActivity.coverArt(): Bitmap {
+        val uri = library.current().tracks.getOrNull(library.currentTrack)?.uri
+        if (!uri.isNullOrBlank()) artCache[uri]?.let { return it }
         cover?.let { return it }
         val size = 256
         val bitmap = Bitmap.createBitmap(size, size, Bitmap.Config.ARGB_8888)

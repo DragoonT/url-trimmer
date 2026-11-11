@@ -133,8 +133,10 @@ class MainActivity : Activity() {
     internal var serviceUp = false
     internal var cover: Bitmap? = null
     internal val metaCache = HashMap<String, Meta>()
+    internal val artCache = HashMap<String, Bitmap>()
     internal val metaLoading = HashSet<String>()
     internal val metaLabels = ArrayList<Pair<String, TextView>>()
+    internal val artViews = ArrayList<Pair<String, RecordView>>()
     internal val ticker = Handler(Looper.getMainLooper())
     internal val tick = object : Runnable {
         override fun run() {
@@ -315,6 +317,7 @@ class MainActivity : Activity() {
         playerArtist = null
         videoHost = null
         metaLabels.clear()
+        artViews.clear()
         val page = history.last()
         val pageView = when (page) {
             Page.LIST -> listPage()

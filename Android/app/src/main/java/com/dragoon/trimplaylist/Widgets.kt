@@ -103,6 +103,9 @@ internal fun MainActivity.publishToTrimPlaylist(source: File): Pair<Uri, String>
         val mime = when (source.extension.lowercase()) {
             "mp3" -> "audio/mpeg"
             "m4a", "aac" -> "audio/mp4"
+            "jpg", "jpeg" -> "image/jpeg"
+            "png" -> "image/png"
+            "webp" -> "image/webp"
             "webm" -> if (Library.looksLikeVideo(name)) "video/webm" else "audio/webm"
             "mkv" -> "video/x-matroska"
             "mov" -> "video/quicktime"

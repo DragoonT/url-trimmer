@@ -10,6 +10,9 @@ data class Track(
     val kind: String,
     val video: Boolean,
     var volume: Float = 1f,
+    var artist: String = "",
+    var durationMs: Int = 0,
+    var thumb: String = "",
 )
 
 data class Playlist(
@@ -45,7 +48,10 @@ class Library(context: Context) {
                         .put("uri", track.uri)
                         .put("kind", track.kind)
                         .put("video", track.video)
-                        .put("volume", track.volume.toDouble()),
+                        .put("volume", track.volume.toDouble())
+                        .put("artist", track.artist)
+                        .put("durationMs", track.durationMs)
+                        .put("thumb", track.thumb),
                 )
             }
             list.put(JSONObject().put("name", playlist.name).put("tracks", tracks))
@@ -95,6 +101,9 @@ class Library(context: Context) {
                     kind = track.optString("kind", "file"),
                     video = track.optBoolean("video"),
                     volume = track.optDouble("volume", 1.0).toFloat().coerceIn(0.5f, 5f),
+                    artist = track.optString("artist"),
+                    durationMs = track.optInt("durationMs"),
+                    thumb = track.optString("thumb"),
                 )
             }
             playlists += Playlist(item.optString("name", "Playlist"), tracks)
