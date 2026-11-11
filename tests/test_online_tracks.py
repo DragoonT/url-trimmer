@@ -50,8 +50,33 @@ class OnlineTrackTests(unittest.TestCase):
         online_media._cache.clear()
         with patch("yt_dlp.YoutubeDL", Downloader):
             stream = online_media.resolve_stream({"url": "https://example.test/watch", "kind": "video"}, "720")
-        self.assertIn("height=720", captured["format"])
+        self.assertIn("height<=720", captured["format"])
         self.assertEqual(stream["mime"], "video/mp4")
+
+    def test_best_available_prefers_adaptive_video(self):
+        captured = {}
+
+        class Downloader:
+            def __init__(self, options):
+                captured.update(options)
+            def __enter__(self): return self
+            def __exit__(self, *args): return False
+            def extract_info(self, url, download=False):
+                return {
+                    "requested_formats": [
+                        {"url": "https://cdn.example.test/video.mp4"},
+                        {"url": "https://cdn.example.test/audio.m4a"},
+                    ],
+                    "http_headers": {"User-Agent": "test"},
+                }
+
+        online_media._cache.clear()
+        with patch("yt_dlp.YoutubeDL", Downloader):
+            stream = online_media.resolve_stream({"url": "https://example.test/watch", "kind": "video"}, "original")
+        self.assertIn("bestvideo", captured["format"])
+        self.assertTrue(stream["adaptive"])
+        self.assertEqual(stream["video_url"], "https://cdn.example.test/video.mp4")
+        self.assertEqual(stream["audio_url"], "https://cdn.example.test/audio.m4a")
 
 
 if __name__ == "__main__":

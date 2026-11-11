@@ -128,7 +128,12 @@ internal fun MainActivity.detailPage(): View {
         })
         actions.addView(space(8))
         actions.addView(iconPill("play", "Play", true) {
-            if (playlist.tracks.isEmpty()) toast("Add a song first") else play(0, 0)
+            if (playlist.tracks.isEmpty()) {
+                toast("Add a song first")
+            } else {
+                val start = if (library.currentTrack in playlist.tracks.indices) library.currentTrack else 0
+                play(start, if (start == library.currentTrack) library.positionMs else 0)
+            }
         })
         root.addView(actions)
         val scroll = ScrollView(this)
@@ -159,27 +164,31 @@ internal fun MainActivity.playlistMenu(index: Int) {
     }
 
 internal fun MainActivity.addDownload() {
-        val folder = File(getExternalFilesDir(null) ?: filesDir, "Downloads")
         val used = library.current().tracks.map { it.uri }.toSet()
-        val files = folder.listFiles()?.filter { file ->
-            file.isFile && !file.name.endsWith(".video.mp4") && !file.name.endsWith(".audio.m4a") && file.toURI().toString() !in used
-        }?.sortedByDescending { it.lastModified() }.orEmpty()
+        val files = listTrimDownloads().filter { (_, uri) -> uri.toString() !in used }
         if (files.isEmpty()) {
-            toast("No downloads to add")
+            toast("No downloads in Download/TrimPlaylist/")
             return
         }
-        val labels = files.map { it.name.substringBeforeLast('.') }.toTypedArray()
+        val labels = files.map { (name, uri) -> friendlyDownloadPath(uri, name) }.toTypedArray()
         val checked = BooleanArray(files.size)
         AlertDialog.Builder(this)
             .setTitle("Add download")
             .setMultiChoiceItems(labels, checked) { _, which, on -> checked[which] = on }
             .setPositiveButton("Add") { _, _ ->
-                files.forEachIndexed { index, file ->
+                files.forEachIndexed { index, (name, uri) ->
                     if (!checked[index]) return@forEachIndexed
-                    val title = file.name.substringBeforeLast('.')
-                    library.current().tracks += Track(title, file.toURI().toString(), "file", Library.looksLikeVideo(file.name))
+                    val title = name.substringBeforeLast('.')
+                    val path = uri.toString()
+                    val tracks = library.current().tracks
+                    val onlineMatch = tracks.indexOfFirst { track ->
+                        track.kind == "online" && track.title.substringBefore(" · ").equals(title, true)
+                    }
+                    val local = Track(title, path, "file", Library.looksLikeVideo(name))
+                    if (onlineMatch >= 0) tracks[onlineMatch] = local else tracks += local
                 }
                 library.save()
+                toast("Using files from Download/TrimPlaylist/")
                 show()
             }
             .setNegativeButton("Cancel", null)

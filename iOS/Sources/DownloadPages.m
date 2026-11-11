@@ -451,6 +451,8 @@
     if (!youtube) return page;
     NSString *video = [self firstMatch:@"(?:v=|youtu\\.be/|shorts/|embed/)([A-Za-z0-9_-]{11})" in:page];
     if (!video.length) @throw [NSException exceptionWithName:@"download" reason:@"That YouTube link has no video" userInfo:nil];
+    // Keep Online as a direct stream (not a saved remux). Prefer the highest
+    // progressive file YouTube exposes for AVPlayer.
     return [self youtubeItem:video audio:audio quality:0 cookie:cookie split:NO][@"url"] ?: @"";
 }
 

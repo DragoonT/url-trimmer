@@ -69,6 +69,108 @@ internal fun MainActivity.platformKey() = "connected-$downloadPlatform"
 
 internal fun MainActivity.cookiesDir() = File(filesDir, "cookies").apply { mkdirs() }
 
+/** Public Downloads/TrimPlaylist, with a private fallback if the public folder is blocked. */
+internal fun MainActivity.trimDownloadDir(): File {
+        val publicDir = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "TrimPlaylist")
+        if (publicDir.exists() || publicDir.mkdirs()) return publicDir
+        return File(getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS) ?: filesDir, "TrimPlaylist").also { it.mkdirs() }
+    }
+
+internal fun MainActivity.legacyDownloadDir() = File(getExternalFilesDir(null) ?: filesDir, "Downloads")
+
+internal fun MainActivity.stagingDownloadDir() = File(cacheDir, "trim-dl").also { it.mkdirs() }
+
+internal fun MainActivity.friendlyDownloadPath(file: File): String {
+        val publicRoot = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS).absolutePath
+        val prefix = "$publicRoot${File.separator}TrimPlaylist"
+        return if (file.absolutePath.startsWith(prefix)) "Download/TrimPlaylist/${file.name}" else file.absolutePath
+    }
+
+internal fun MainActivity.friendlyDownloadPath(uri: Uri, name: String): String {
+        if (uri.scheme == "file") {
+            val path = uri.path ?: return "Download/TrimPlaylist/$name"
+            return friendlyDownloadPath(File(path))
+        }
+        return "Download/TrimPlaylist/$name"
+    }
+
+internal fun MainActivity.needsLegacyWritePermission(): Boolean =
+        Build.VERSION.SDK_INT < 29 &&
+            checkSelfPermission(Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED
+
+internal fun MainActivity.publishToTrimPlaylist(source: File): Pair<Uri, String> {
+        val name = source.name
+        val mime = when (source.extension.lowercase()) {
+            "mp3" -> "audio/mpeg"
+            "m4a", "aac" -> "audio/mp4"
+            "webm" -> if (Library.looksLikeVideo(name)) "video/webm" else "audio/webm"
+            "mkv" -> "video/x-matroska"
+            "mov" -> "video/quicktime"
+            else -> if (Library.looksLikeVideo(name)) "video/mp4" else "audio/mp4"
+        }
+        if (Build.VERSION.SDK_INT >= 29) {
+            val values = android.content.ContentValues().apply {
+                put(android.provider.MediaStore.MediaColumns.DISPLAY_NAME, name)
+                put(android.provider.MediaStore.MediaColumns.MIME_TYPE, mime)
+                put(android.provider.MediaStore.MediaColumns.RELATIVE_PATH, "${Environment.DIRECTORY_DOWNLOADS}/TrimPlaylist")
+                put(android.provider.MediaStore.MediaColumns.IS_PENDING, 1)
+            }
+            val uri = contentResolver.insert(android.provider.MediaStore.Downloads.EXTERNAL_CONTENT_URI, values)
+                ?: error("Couldn't create Download/TrimPlaylist/$name")
+            contentResolver.openOutputStream(uri)?.use { out -> source.inputStream().use { it.copyTo(out) } }
+                ?: error("Couldn't write Download/TrimPlaylist/$name")
+            values.clear()
+            values.put(android.provider.MediaStore.MediaColumns.IS_PENDING, 0)
+            contentResolver.update(uri, values, null, null)
+            source.delete()
+            return uri to "Download/TrimPlaylist/$name"
+        }
+        val dir = trimDownloadDir()
+        var dest = File(dir, name)
+        var n = 2
+        while (dest.exists()) {
+            dest = File(dir, "${source.nameWithoutExtension} $n.${source.extension}")
+            n += 1
+        }
+        source.copyTo(dest, overwrite = true)
+        source.delete()
+        sendBroadcast(Intent(Intent.ACTION_MEDIA_SCANNER_SCAN_FILE, Uri.fromFile(dest)))
+        return Uri.fromFile(dest) to friendlyDownloadPath(dest)
+    }
+
+internal fun MainActivity.listTrimDownloads(): List<Pair<String, Uri>> {
+        val found = linkedMapOf<String, Uri>()
+        if (Build.VERSION.SDK_INT >= 29) {
+            val projection = arrayOf(
+                android.provider.MediaStore.MediaColumns._ID,
+                android.provider.MediaStore.MediaColumns.DISPLAY_NAME,
+            )
+            contentResolver.query(
+                android.provider.MediaStore.Downloads.EXTERNAL_CONTENT_URI,
+                projection,
+                "${android.provider.MediaStore.MediaColumns.RELATIVE_PATH} LIKE ?",
+                arrayOf("%TrimPlaylist%"),
+                "${android.provider.MediaStore.MediaColumns.DATE_ADDED} DESC",
+            )?.use { cursor ->
+                val idCol = cursor.getColumnIndexOrThrow(android.provider.MediaStore.MediaColumns._ID)
+                val nameCol = cursor.getColumnIndexOrThrow(android.provider.MediaStore.MediaColumns.DISPLAY_NAME)
+                while (cursor.moveToNext()) {
+                    val name = cursor.getString(nameCol) ?: continue
+                    val id = cursor.getLong(idCol)
+                    val uri = Uri.withAppendedPath(android.provider.MediaStore.Downloads.EXTERNAL_CONTENT_URI, id.toString())
+                    found.putIfAbsent(name, uri)
+                }
+            }
+        }
+        listOf(trimDownloadDir(), legacyDownloadDir()).forEach { folder ->
+            folder.listFiles()?.filter { it.isFile }?.sortedByDescending { it.lastModified() }?.forEach { file ->
+                if (file.name.endsWith(".video.mp4") || file.name.endsWith(".audio.m4a")) return@forEach
+                found.putIfAbsent(file.name, Uri.fromFile(file))
+            }
+        }
+        return found.map { (name, uri) -> name to uri }
+    }
+
 internal fun MainActivity.displayName(uri: Uri): String {
         contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use { cursor ->
             if (cursor.moveToFirst()) return cursor.getString(0) ?: "Track"

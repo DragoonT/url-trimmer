@@ -266,9 +266,14 @@ internal fun MainActivity.play(index: Int, seekMs: Int) {
             toast("Choose this file again")
             return
         }
-        if (track.kind == "online" && (track.uri.contains("youtube.com") || track.uri.contains("youtu.be"))) {
-            if (streamBusy) return
+        // Local / saved downloads must never go through the online stream path.
+        val local = track.kind == "file" || track.uri.startsWith("content:") || track.uri.startsWith("file:") ||
+            (track.uri.startsWith("/") && !track.uri.startsWith("//"))
+        if (!local && track.kind == "online" && (track.uri.contains("youtube.com") || track.uri.contains("youtu.be"))) {
+            val gen = ++streamGen
             streamBusy = true
+            streamPageUri = track.uri
+            streamAudioOnly = !track.video
             toast("Opening stream…")
             val audio = !track.video
             val cookie = authCookieHeader("www.youtube.com")
@@ -276,19 +281,38 @@ internal fun MainActivity.play(index: Int, seekMs: Int) {
                 try {
                     val stream = PhoneDownload.playback(track.uri, audio, cookie)
                     runOnUiThread {
+                        if (gen != streamGen) return@runOnUiThread
                         streamBusy = false
+                        streamHeaders = buildStreamHeaders(cookie)
                         beginPlay(index, Uri.parse(stream), track.video, seekMs)
                     }
                 } catch (error: Exception) {
                     runOnUiThread {
+                        if (gen != streamGen) return@runOnUiThread
                         streamBusy = false
+                        streamHeaders = emptyMap()
+                        streamPageUri = ""
                         toast(error.message ?: "Couldn't open that stream")
                     }
                 }
             }.start()
             return
         }
+        streamGen += 1
+        streamBusy = false
+        streamHeaders = emptyMap()
+        streamPageUri = ""
+        streamAudioOnly = false
         beginPlay(index, Uri.parse(track.uri), track.video, seekMs)
+    }
+
+internal fun MainActivity.buildStreamHeaders(cookie: String?): Map<String, String> {
+        val headers = linkedMapOf(
+            "User-Agent" to "com.google.android.youtube/20.10.38 (Linux; U; Android 11) gzip",
+            "Referer" to "https://www.youtube.com/",
+        )
+        if (!cookie.isNullOrBlank()) headers["Cookie"] = cookie
+        return headers
     }
 
 internal fun MainActivity.beginPlay(index: Int, uri: Uri, video: Boolean, seekMs: Int) {
@@ -296,8 +320,44 @@ internal fun MainActivity.beginPlay(index: Int, uri: Uri, video: Boolean, seekMs
         val gain = library.current().tracks.getOrNull(index)?.volume ?: 1f
         library.positionMs = seekMs
         library.save()
+        val onPlayer = history.lastOrNull() == Page.PLAYER
         if (video && engine.surface == null) engine.queue(uri, seekMs, gain) else engine.play(uri, video, seekMs, gain)
-        show()
+        if (!onPlayer) {
+            open(Page.PLAYER)
+        } else {
+            // Rebuild player chrome without relying on a second open(); keep playback alive.
+            motion = 0
+            show()
+        }
+    }
+
+internal fun MainActivity.retryOnlineStream(fromMs: Int) {
+        val page = streamPageUri
+        if (page.isBlank()) return
+        val index = library.currentTrack
+        if (index < 0) return
+        val gen = ++streamGen
+        streamBusy = true
+        val audio = streamAudioOnly
+        val cookie = authCookieHeader("www.youtube.com")
+        Thread {
+            try {
+                val stream = PhoneDownload.playback(page, audio, cookie)
+                runOnUiThread {
+                    if (gen != streamGen) return@runOnUiThread
+                    streamBusy = false
+                    streamHeaders = buildStreamHeaders(cookie)
+                    val track = library.current().tracks.getOrNull(index) ?: return@runOnUiThread
+                    beginPlay(index, Uri.parse(stream), track.video, fromMs.coerceAtLeast(0))
+                }
+            } catch (error: Exception) {
+                runOnUiThread {
+                    if (gen != streamGen) return@runOnUiThread
+                    streamBusy = false
+                    toast(error.message ?: "Couldn't open that stream")
+                }
+            }
+        }.start()
     }
 
 internal fun MainActivity.togglePlay() {

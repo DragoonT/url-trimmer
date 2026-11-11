@@ -47,17 +47,26 @@ def resolve_stream(item, quality='original'):
         if mode == 'audio':
             media_format = 'bestaudio[ext=m4a][protocol=https]/bestaudio[protocol=https]/bestaudio[protocol=http]'
         elif quality.isdigit():
-            # Do not silently downgrade a requested quality. H.264 first (plays
-            # everywhere); platforms only ship above 1080p as VP9/AV1, so fall
-            # back to any codec — the server muxes both streams into a playable
-            # fragmented MP4 with ffmpeg.
+            # Match the "Up to NNp" menu: take the best stream at or under the
+            # chosen height. Prefer adaptive video+audio (higher YouTube rungs)
+            # and remux with ffmpeg; fall back to a progressive muxed file.
             media_format = (
-                f'bestvideo[height={quality}][vcodec^=avc1][protocol=https]+bestaudio[acodec^=mp4a][protocol=https]/'
-                f'bestvideo[height={quality}][protocol=https]+bestaudio[protocol=https]/'
-                f'best[height={quality}][acodec!=none][vcodec!=none][protocol=https]'
+                f'bestvideo[height<={quality}][vcodec^=avc1][protocol=https]+bestaudio[acodec^=mp4a][protocol=https]/'
+                f'bestvideo[height<={quality}][protocol=https]+bestaudio[protocol=https]/'
+                f'best[height<={quality}][acodec!=none][vcodec!=none][protocol=https]/'
+                f'best[height<={quality}][protocol=https]'
             )
         else:
-            media_format = 'best[ext=mp4][vcodec^=avc1][protocol=https]/best[ext=mp4][protocol=https]/best[protocol=https]/best[protocol=http]'
+            # Best available: do not stop at the low progressive file YouTube
+            # often returns for "best". Prefer adaptive, same as the stch video tab.
+            media_format = (
+                'bestvideo[vcodec^=avc1][protocol=https]+bestaudio[acodec^=mp4a][protocol=https]/'
+                'bestvideo[protocol=https]+bestaudio[protocol=https]/'
+                'best[ext=mp4][vcodec^=avc1][protocol=https]/'
+                'best[ext=mp4][protocol=https]/'
+                'best[protocol=https]/'
+                'best[protocol=http]'
+            )
         options = {'quiet': True, 'noplaylist': True, 'playlist_items': '1',
                    'skip_download': True, 'js_runtimes': {'deno': {}, 'node': {}}, 'socket_timeout': 20,
                    'format': media_format}

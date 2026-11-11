@@ -46,15 +46,23 @@ object PhoneDownload {
         val youtube = pageUrl.contains("youtube.com") || pageUrl.contains("youtu.be")
         if (!youtube) return pageUrl
         val id = videoId(pageUrl) ?: error("That YouTube link has no video")
+        // Keep Online as a direct stream (not a saved remux). Prefer progressive MP4
+        // so MediaPlayer can keep playing without mid-stream adaptive failures.
         return stream(id, audio, 0, cookie, split = false).url
     }
 
     private fun videoId(url: String) = Regex("(?:v=|youtu\\.be/|shorts/|embed/)([A-Za-z0-9_-]{11})").find(url)?.groupValues?.get(1)
 
     private fun playlistIds(id: String, cookie: String?): List<String> {
+        val entries = playlistEntries(id, cookie)
+        if (entries.isEmpty()) error("No videos were found in that playlist")
+        return entries.map { it.first }
+    }
+
+    private fun playlistEntries(id: String, cookie: String?): List<Pair<String, String>> {
         val fromApi = runCatching {
             val body = """{"browseId":"VL$id","context":{"client":{"clientName":"WEB","clientVersion":"2.20250301.01.00","hl":"en"}}}"""
-            idsIn(post("https://www.youtube.com/youtubei/v1/browse?prettyPrint=false", body, cookie, mapOf("User-Agent" to CHROME)))
+            entriesIn(post("https://www.youtube.com/youtubei/v1/browse?prettyPrint=false", body, cookie, mapOf("User-Agent" to CHROME)))
         }.getOrDefault(emptyList())
         if (fromApi.isNotEmpty()) return fromApi
         val page = get(
@@ -62,36 +70,35 @@ object PhoneDownload {
             cookie,
             mapOf("User-Agent" to CHROME, "Accept-Language" to "en"),
         )
-        val fromPage = idsIn(page)
+        val fromPage = entriesIn(page)
         if (fromPage.isEmpty()) error("No videos were found in that playlist")
         return fromPage
     }
 
-    private fun playlistEntries(id: String, cookie: String?): List<Pair<String, String>> {
-        val page = get(
-            "https://www.youtube.com/playlist?list=$id",
-            cookie,
-            mapOf("User-Agent" to CHROME, "Accept-Language" to "en"),
-        )
+    /** Prefer playlist renderers so Online/Download picks match the same videos the user selected. */
+    private fun entriesIn(text: String): List<Pair<String, String>> {
         val titles = linkedMapOf<String, String>()
+        Regex(""""playlistVideoRenderer"\s*:\s*\{\s*"videoId"\s*:\s*"([A-Za-z0-9_-]{11})"""").findAll(text).forEach { hit ->
+            val video = hit.groupValues[1]
+            val window = text.substring(hit.range.first, minOf(text.length, hit.range.last + 1200))
+            val name = Regex(""""title"\s*:\s*\{\s*"runs"\s*:\s*\[\s*\{\s*"text"\s*:\s*"((?:\\.|[^"\\])*)"""").find(window)?.groupValues?.get(1)
+            if (video !in titles) titles[video] = if (!name.isNullOrBlank()) jsonText(name) else video
+        }
+        if (titles.isNotEmpty()) return titles.map { it.key to it.value }
         val marker = Regex(""""videoId":"([A-Za-z0-9_-]{11})"""")
         var from = 0
-        while (from < page.length) {
-            val hit = marker.find(page, from) ?: break
+        while (from < text.length) {
+            val hit = marker.find(text, from) ?: break
             val video = hit.groupValues[1]
-            val window = page.substring(hit.range.last, minOf(page.length, hit.range.last + 900))
-            val text = Regex(""""title":\{"runs":\[\{"text":"((?:\\.|[^"\\])*)"""").find(window)?.groupValues?.get(1)
-            if (!text.isNullOrBlank() && video !in titles) titles[video] = jsonText(text)
+            val window = text.substring(hit.range.last, minOf(text.length, hit.range.last + 900))
+            val name = Regex(""""title":\{"runs":\[\{"text":"((?:\\.|[^"\\])*)"""").find(window)?.groupValues?.get(1)
+            if (!name.isNullOrBlank() && video !in titles) titles[video] = jsonText(name)
             from = hit.range.last
         }
-        val ids = if (titles.isEmpty()) idsIn(page) else titles.keys.toList()
-        if (ids.isEmpty()) error("No videos were found in that playlist")
-        return ids.map { it to (titles[it] ?: it) }
+        return titles.map { it.key to it.value }
     }
 
     private fun jsonText(raw: String) = raw.replace("\\\"", "\"").replace("\\u0026", "&").replace("\\/", "/").replace("\\\\", "\\")
-
-    private fun idsIn(text: String) = Regex(""""videoId":"([A-Za-z0-9_-]{11})"""").findAll(text).map { it.groupValues[1] }.distinct().toList()
 
     private fun stream(id: String, audio: Boolean, maxHeight: Int, cookie: String?, split: Boolean = true): Item {
         val body = """{"videoId":"$id","context":{"client":{"clientName":"ANDROID","clientVersion":"20.10.38","androidSdkVersion":30,"hl":"en","gl":"US"}}}"""
@@ -121,7 +128,12 @@ object PhoneDownload {
                 return Item("$title · ${height}p", picture.optString("url"), "mp4", true, sound.optString("url"), combined)
             }
         }
-        val chosen = if (audio) pickAudio(streaming) else pickVideo(streaming, maxHeight)
+        val chosen = if (audio) {
+            // Prefer a progressive A+V file when available — more stable for Online play.
+            runCatching { pickVideo(streaming, maxHeight) }.getOrNull()?.takeIf {
+                it.optString("mimeType").contains("mp4") && it.optString("url").isNotBlank()
+            } ?: pickAudio(streaming)
+        } else pickVideo(streaming, maxHeight)
         val ext = when {
             chosen.optString("mimeType").contains("webm") && audio -> "webm"
             chosen.optString("mimeType").contains("audio") -> "m4a"

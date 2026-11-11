@@ -94,8 +94,8 @@ internal fun MainActivity.onlinePage(): View {
                 toast("Enter a video or playlist URL")
                 return@solid
             }
-            if (streamBusy) return@solid
-            streamBusy = true
+            if (catalogBusy) return@solid
+            catalogBusy = true
             toast("Loading…")
             val cookie = authCookieHeader(if (entered.contains("youtu")) "www.youtube.com" else (Uri.parse(entered).host ?: ""))
             Thread {
@@ -103,7 +103,7 @@ internal fun MainActivity.onlinePage(): View {
                     val found = PhoneDownload.catalog(entered, cookie)
                     val playlist = entered.contains("list=")
                     runOnUiThread {
-                        streamBusy = false
+                        catalogBusy = false
                         if (!playlist || onlineType == 1) addOnline(found)
                         else {
                             onlineChoices.clear()
@@ -114,7 +114,7 @@ internal fun MainActivity.onlinePage(): View {
                     }
                 } catch (error: Exception) {
                     runOnUiThread {
-                        streamBusy = false
+                        catalogBusy = false
                         toast(error.message ?: "Couldn't read that URL")
                     }
                 }

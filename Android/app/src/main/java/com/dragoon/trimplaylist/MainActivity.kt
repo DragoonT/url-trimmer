@@ -81,6 +81,11 @@ class MainActivity : Activity() {
     internal val onlineChoices = mutableListOf<Pair<String, String>>()
     internal val onlinePicked = mutableSetOf<Int>()
     internal var streamBusy = false
+    internal var streamGen = 0
+    internal var catalogBusy = false
+    internal var streamHeaders: Map<String, String> = emptyMap()
+    internal var streamPageUri = ""
+    internal var streamAudioOnly = false
     internal val downloadChoices = mutableListOf<Pair<String, String>>()
     internal val downloadPicked = mutableSetOf<Int>()
     internal var downloadChoiceUrl = ""
@@ -385,22 +390,32 @@ class MainActivity : Activity() {
         private var queued: Pair<Uri, Int>? = null
         private var queuedGain = 1f
         private var videoMode = false
+        private var streamRetries = 0
+        private var onlineUri = false
         var onChange: (() -> Unit)? = null
         private val focusRequest = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN)
             .setAudioAttributes(audioAttributes())
-            .setOnAudioFocusChangeListener { if (it == AudioManager.AUDIOFOCUS_LOSS) { pause(); onChange?.invoke() } }
+            .setOnAudioFocusChangeListener { change ->
+                when (change) {
+                    AudioManager.AUDIOFOCUS_LOSS -> { pause(); onChange?.invoke() }
+                    AudioManager.AUDIOFOCUS_LOSS_TRANSIENT, AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK -> {
+                        pause(); onChange?.invoke()
+                    }
+                    AudioManager.AUDIOFOCUS_GAIN -> {
+                        if (ready && !playing()) try { player.start(); onChange?.invoke() } catch (_: IllegalStateException) {}
+                    }
+                }
+            }
             .build()
 
         fun attach(next: Surface) {
-            surface?.release()
             surface = next
-            if (videoMode && ready) try { player.setSurface(next) } catch (_: IllegalStateException) {}
+            if (videoMode) try { player.setSurface(next) } catch (_: IllegalStateException) {}
             queued?.let { (uri, seek) -> queued = null; play(uri, true, seek, queuedGain) }
         }
 
         fun detach() {
             try { player.setSurface(null) } catch (_: IllegalStateException) {}
-            surface?.release()
             surface = null
         }
 
@@ -412,18 +427,28 @@ class MainActivity : Activity() {
             ready = false
             videoMode = video
             queued = null
+            streamRetries = 0
+            onlineUri = uri.host?.contains("googlevideo") == true || streamPageUri.isNotBlank()
             getSystemService(AudioManager::class.java).requestAudioFocus(focusRequest)
             try {
                 player.reset()
+                player.setWakeMode(this@MainActivity, android.os.PowerManager.PARTIAL_WAKE_LOCK)
                 player.setAudioAttributes(audioAttributes())
-                val headers = if (uri.host?.contains("googlevideo") == true) {
-                    mapOf("User-Agent" to "com.google.android.youtube/20.10.38 (Linux; U; Android 11) gzip")
-                } else emptyMap()
+                val headers = when {
+                    streamHeaders.isNotEmpty() && (uri.scheme == "http" || uri.scheme == "https") -> streamHeaders
+                    uri.host?.contains("googlevideo") == true -> mapOf(
+                        "User-Agent" to "com.google.android.youtube/20.10.38 (Linux; U; Android 11) gzip",
+                        "Referer" to "https://www.youtube.com/",
+                    )
+                    else -> emptyMap()
+                }
                 if (headers.isEmpty()) player.setDataSource(this@MainActivity, uri) else player.setDataSource(this@MainActivity, uri, headers)
                 player.setSurface(if (video) surface else null)
                 player.setOnPreparedListener {
                     if (current != token) return@setOnPreparedListener
                     ready = true
+                    streamRetries = 0
+                    if (videoMode) try { player.setSurface(surface) } catch (_: IllegalStateException) {}
                     applyVolume()
                     if (seekMs > 0) it.seekTo(seekMs)
                     it.start()
@@ -431,7 +456,16 @@ class MainActivity : Activity() {
                 }
                 player.setOnCompletionListener { if (current == token) onTrackEnded() }
                 player.setOnErrorListener { _, _, _ ->
-                    if (current == token) { ready = false; toast("Couldn't play that track") }
+                    if (current != token) return@setOnErrorListener true
+                    val position = try { player.currentPosition } catch (_: IllegalStateException) { seekMs }
+                    ready = false
+                    if (onlineUri && streamPageUri.isNotBlank() && streamRetries < 2) {
+                        streamRetries += 1
+                        toast("Reconnecting stream…")
+                        retryOnlineStream(position)
+                        return@setOnErrorListener true
+                    }
+                    toast("Couldn't play that track")
                     true
                 }
                 player.prepareAsync()

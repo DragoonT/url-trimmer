@@ -133,7 +133,7 @@ internal fun MainActivity.urlPage(): View {
         val volume = field("1").remember(draftVolume.ifBlank { "1" }) { draftVolume = it.ifBlank { "1" } }
         form.addView(volume)
         form.addView(muted("1 = original volume · 2 = boost"))
-        form.addView(muted("The file stays in Downloads. Add it to a playlist from the playlist menu."))
+        form.addView(muted("Saved files go to Download/TrimPlaylist/. Add them to a playlist from the playlist menu."))
         val picking = downloadType == 0 && downloadChoices.isNotEmpty()
         if (picking) {
             form.addView(spaceH(8))
@@ -462,6 +462,11 @@ internal fun MainActivity.clock(value: String): Double {
     }
 
 internal fun MainActivity.beginDownload(pages: List<String>, trimming: Boolean, trimStart: Double, trimEnd: Double, trimName: String) {
+        if (needsLegacyWritePermission()) {
+            requestPermissions(arrayOf(Manifest.permission.WRITE_EXTERNAL_STORAGE), 45)
+            toast("Allow storage access, then start the download again")
+            return
+        }
         downloadBusy = true
         downloadCleared = false
         val audio = downloadFormat == 1
@@ -473,7 +478,8 @@ internal fun MainActivity.beginDownload(pages: List<String>, trimming: Boolean, 
         Thread {
             try {
                 val items = pages.flatMap { PhoneDownload.items(it, audio, maxHeight, cookie) }
-                val folder = File(getExternalFilesDir(null) ?: filesDir, "Downloads")
+                val folder = stagingDownloadDir()
+                val saved = mutableListOf<Pair<Track, String>>()
                 items.forEachIndexed { index, item ->
                     val place = if (items.size > 1) "${index + 1}/${items.size} · " else ""
                     var file = PhoneDownload.save(folder, item, cookie) { fraction ->
@@ -484,15 +490,54 @@ internal fun MainActivity.beginDownload(pages: List<String>, trimming: Boolean, 
                         reportDownload("Trimming ${item.title} · $place", 0.98f)
                         file = PhoneDownload.cut(file, trimStart, trimEnd, trimName.ifBlank { item.title.substringBefore(" · ") })
                     }
+                    reportDownload("Saving ${item.title} · $place", 0.99f)
+                    val title = item.title.substringBefore(" · ").ifBlank { file.nameWithoutExtension }
+                    val (uri, path) = publishToTrimPlaylist(file)
+                    val local = Track(title, uri.toString(), "file", item.video || Library.looksLikeVideo(file.name))
+                    saved += local to path
+                    reportDownload("Saved $path", 1f)
                 }
-                val word = if (items.size == 1) "file" else "files"
-                reportDownload("Saved ${items.size} $word · 100%", 1f)
+                val summary = if (saved.size == 1) {
+                    "Saved ${saved[0].second}"
+                } else {
+                    "Saved ${saved.size} files in Download/TrimPlaylist/"
+                }
+                reportDownload("$summary · 100%", 1f)
+                runOnUiThread { offerDownloadedTracks(saved) }
             } catch (error: Exception) {
                 reportDownload(error.message ?: "Download failed", 0f)
             } finally {
                 downloadBusy = false
             }
         }.start()
+    }
+
+internal fun MainActivity.offerDownloadedTracks(saved: List<Pair<Track, String>>) {
+        if (saved.isEmpty()) return
+        val labels = saved.map { it.second }.toTypedArray()
+        val checked = BooleanArray(saved.size) { true }
+        AlertDialog.Builder(this)
+            .setTitle("Add saved files to playlist?")
+            .setMultiChoiceItems(labels, checked) { _, which, on -> checked[which] = on }
+            .setPositiveButton("Add") { _, _ ->
+                saved.forEachIndexed { index, (local, _) ->
+                    if (!checked[index]) return@forEachIndexed
+                    // Replace matching online rows so Play uses storage, not the stream.
+                    val tracks = library.current().tracks
+                    val onlineMatch = tracks.indexOfFirst { track ->
+                        track.kind == "online" && (
+                            track.title.equals(local.title, true) ||
+                                track.title.substringBefore(" · ").equals(local.title.substringBefore(" · "), true)
+                            )
+                    }
+                    if (onlineMatch >= 0) tracks[onlineMatch] = local else tracks += local
+                }
+                library.save()
+                toast("Added from Download/TrimPlaylist/")
+                show()
+            }
+            .setNegativeButton("Later", null)
+            .show()
     }
 
 internal fun MainActivity.authCookieHeader(host: String): String? {
