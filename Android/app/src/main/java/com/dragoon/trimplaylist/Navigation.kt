@@ -172,26 +172,46 @@ internal fun MainActivity.drop(parent: LinearLayout, captionText: String, option
         parent.addView(spaceH(8))
     }
 
+internal fun MainActivity.hideSoftKeyboard(anchor: View) {
+        currentFocus?.clearFocus()
+        anchor.clearFocus()
+        val imm = getSystemService(Context.INPUT_METHOD_SERVICE) as android.view.inputmethod.InputMethodManager
+        imm.hideSoftInputFromWindow(anchor.windowToken, 0)
+    }
+
 internal fun MainActivity.popup(anchor: View, options: List<String>, onPick: (String) -> Unit) {
-        val list = column(0, px(4), 0, px(4)).apply { background = rounded(dialogBg(), 12) }
-        options.forEach { option ->
-            list.addView(TextView(this).apply {
-                text = option
-                setTextColor(ink())
-                textSize = 16f
-                setPadding(px(14), px(12), px(14), px(12))
-            })
-        }
-        val scroll = ScrollView(this).apply { addView(list) }
-        val popup = PopupWindow(scroll, anchor.width.coerceAtLeast(px(220)), px(48 * options.size.coerceAtMost(6)), true)
-        popup.setBackgroundDrawable(rounded(dialogBg(), 12))
-        popup.isOutsideTouchable = true
-        options.forEachIndexed { index, _ ->
-            (list.getChildAt(index) as TextView).setOnClickListener {
-                popup.dismiss()
-                onPick(options[index])
+        // URL fields keep the keyboard open. Closing it after the popup opens dismisses the
+        // menu immediately (Format looked stuck on MP4 until another dropdown stole focus).
+        hideSoftKeyboard(anchor)
+        anchor.post {
+            if (!anchor.isAttachedToWindow) return@post
+            val list = column(0, px(4), 0, px(4)).apply { background = rounded(dialogBg(), 12) }
+            options.forEach { option ->
+                list.addView(TextView(this).apply {
+                    text = option
+                    setTextColor(ink())
+                    textSize = 16f
+                    setPadding(px(14), px(12), px(14), px(12))
+                    isClickable = true
+                    isFocusable = true
+                })
             }
+            val scroll = ScrollView(this).apply { addView(list) }
+            val width = anchor.width.coerceAtLeast(px(220))
+            val height = px(48 * options.size.coerceAtMost(6)).coerceAtLeast(px(96))
+            val popup = PopupWindow(scroll, width, height, true)
+            popup.setBackgroundDrawable(rounded(dialogBg(), 12))
+            popup.isOutsideTouchable = true
+            popup.isFocusable = true
+            popup.inputMethodMode = PopupWindow.INPUT_METHOD_NOT_NEEDED
+            popup.softInputMode = android.view.WindowManager.LayoutParams.SOFT_INPUT_STATE_ALWAYS_HIDDEN
+            options.forEachIndexed { index, _ ->
+                (list.getChildAt(index) as TextView).setOnClickListener {
+                    popup.dismiss()
+                    onPick(options[index])
+                }
+            }
+            popup.showAsDropDown(anchor)
         }
-        popup.showAsDropDown(anchor)
     }
 

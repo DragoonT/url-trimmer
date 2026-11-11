@@ -86,7 +86,10 @@ internal fun MainActivity.onlinePage(): View {
         drop(form, "Authentication", listOf("Cookie file", "Platform account", "No authentication"), downloadAuth) { downloadAuth = it; saveTrim(); show() }
         if (downloadAuth == 0) cookiePicker(form)
         if (downloadAuth == 1) platformPicker(form)
-        drop(form, "Format", listOf("MP4 video", "Audio only"), onlineFormat) { onlineFormat = it }
+        drop(form, "Format", listOf("MP4 video", "Audio only"), onlineFormat) {
+            onlineFormat = it
+            show()
+        }
         form.addView(spaceH(8))
         form.addView(solid("Load") {
             val entered = url.text.toString().trim()
