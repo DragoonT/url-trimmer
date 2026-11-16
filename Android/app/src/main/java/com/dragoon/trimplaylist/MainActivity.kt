@@ -220,8 +220,6 @@ class MainActivity : Activity() {
         show()
         ticker.post(tick)
         if (notesOn) ensureNotePermission()
-        // Check on launch so updates are offered without opening Settings.
-        shell.post { checkForUpdate(prompt = true) }
     }
 
     override fun onResume() {
@@ -232,9 +230,15 @@ class MainActivity : Activity() {
             pendingUpdateApk = ""
             installUpdateApk(File(pending))
         }
+        // Auto-check whenever the app is opened or brought back — not only after a full stop.
+        if (needsUpdateCheck) {
+            needsUpdateCheck = false
+            shell.post { checkForUpdate(prompt = true) }
+        }
     }
 
     override fun onStop() {
+        needsUpdateCheck = true
         library.positionMs = engine.position()
         library.save()
         super.onStop()
@@ -263,7 +267,9 @@ class MainActivity : Activity() {
     internal var updateBusy = false
     internal var pendingUpdateApk = ""
     internal var updateChecking = false
-    internal var updatePrompted = false
+    /** True until the first resume, and again after each onStop so reopen while warm still checks. */
+    internal var needsUpdateCheck = true
+    internal var updateOverlay: View? = null
     internal var latestLine = ""
     internal var latestApk = ""
     internal var latestVersion = ""

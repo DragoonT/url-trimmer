@@ -88,7 +88,9 @@ internal fun MainActivity.checkForUpdate(prompt: Boolean = false) {
             var apk = ""
             var version = ""
             try {
-                val json = JSONObject(URL("https://dragoont.github.io/url-trimmer/latest.json").readText())
+                // Bust CDN/cache so a warm app still sees the newest release.
+                val url = "https://dragoont.github.io/url-trimmer/latest.json?t=${System.currentTimeMillis()}"
+                val json = JSONObject(URL(url).readText())
                 version = json.optString("version")
                 if (version.isNotBlank()) {
                     line = "Latest version $version"
@@ -107,16 +109,48 @@ internal fun MainActivity.checkForUpdate(prompt: Boolean = false) {
         }
     }
 
+internal fun MainActivity.dismissUpdateOverlay() {
+        updateOverlay?.let { overlay ->
+            (overlay.parent as? ViewGroup)?.removeView(overlay)
+        }
+        updateOverlay = null
+    }
+
+/** Project-styled in-app modal (same overlay + card pattern as desktop), not a system AlertDialog. */
 internal fun MainActivity.offerUpdatePopup(version: String, apk: String) {
-        if (isFinishing || updatePrompted || apk.isBlank()) return
-        updatePrompted = true
+        if (isFinishing || apk.isBlank() || updateBusy) return
+        if (updateOverlay != null) return
         val label = version.ifBlank { "a newer build" }
-        AlertDialog.Builder(this)
-            .setTitle("Update available")
-            .setMessage("Trim Playlist $label is ready. You are on ${BuildConfig.VERSION_NAME}.")
-            .setPositiveButton("Update") { _, _ -> downloadUpdate(apk) }
-            .setNegativeButton("Later", null)
-            .show()
+        val overlay = FrameLayout(this).apply {
+            setBackgroundColor(Color.argb(170, 0, 0, 0))
+            isClickable = true
+            isFocusable = true
+            setOnClickListener { dismissUpdateOverlay() }
+        }
+        val card = column(px(20), px(20), px(20), px(16)).apply {
+            background = rounded(dialogBg(), 16)
+            elevation = px(8).toFloat()
+            isClickable = true
+            setOnClickListener { /* keep taps on the card from closing */ }
+        }
+        card.addView(label("Update available", 20f, ink(), true))
+        card.addView(spaceH(8))
+        card.addView(muted("Trim Playlist $label is ready. You are on ${BuildConfig.VERSION_NAME}."))
+        card.addView(spaceH(12))
+        card.addView(solid("Update") {
+            dismissUpdateOverlay()
+            downloadUpdate(apk)
+        })
+        card.addView(pill("Later", false) { dismissUpdateOverlay() }.apply {
+            layoutParams = LinearLayout.LayoutParams(MATCH, WRAP).apply { topMargin = px(8) }
+        })
+        overlay.addView(card, FrameLayout.LayoutParams(MATCH, WRAP).apply {
+            gravity = Gravity.CENTER
+            marginStart = px(28)
+            marginEnd = px(28)
+        })
+        shell.addView(overlay, FrameLayout.LayoutParams(MATCH, MATCH))
+        updateOverlay = overlay
     }
 
 /** In-app update: download the APK inside the app, then hand it to PackageInstaller. */
