@@ -78,7 +78,7 @@ internal fun MainActivity.newerVersion(remote: String, local: String): Boolean {
         return false
     }
 
-internal fun MainActivity.checkForUpdate() {
+internal fun MainActivity.checkForUpdate(prompt: Boolean = false) {
         if (updateChecking) return
         updateChecking = true
         latestLine = "Checking…"
@@ -86,9 +86,10 @@ internal fun MainActivity.checkForUpdate() {
         thread {
             var line = "Latest version unavailable"
             var apk = ""
+            var version = ""
             try {
                 val json = JSONObject(URL("https://dragoont.github.io/url-trimmer/latest.json").readText())
-                val version = json.optString("version")
+                version = json.optString("version")
                 if (version.isNotBlank()) {
                     line = "Latest version $version"
                     if (newerVersion(version, BuildConfig.VERSION_NAME)) apk = json.optString("android")
@@ -99,9 +100,23 @@ internal fun MainActivity.checkForUpdate() {
                 updateChecking = false
                 latestLine = line
                 latestApk = apk
+                latestVersion = version
                 if (history.last() == Page.SETTINGS) show()
+                if (prompt && apk.isNotBlank()) offerUpdatePopup(version, apk)
             }
         }
+    }
+
+internal fun MainActivity.offerUpdatePopup(version: String, apk: String) {
+        if (isFinishing || updatePrompted || apk.isBlank()) return
+        updatePrompted = true
+        val label = version.ifBlank { "a newer build" }
+        AlertDialog.Builder(this)
+            .setTitle("Update available")
+            .setMessage("Trim Playlist $label is ready. You are on ${BuildConfig.VERSION_NAME}.")
+            .setPositiveButton("Update") { _, _ -> downloadUpdate(apk) }
+            .setNegativeButton("Later", null)
+            .show()
     }
 
 internal fun MainActivity.downloadUpdate(url: String) {

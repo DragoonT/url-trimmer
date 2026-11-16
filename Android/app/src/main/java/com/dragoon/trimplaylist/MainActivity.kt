@@ -223,6 +223,8 @@ class MainActivity : Activity() {
         if (Build.VERSION.SDK_INT >= 33) registerReceiver(updateReceiver, filter, RECEIVER_NOT_EXPORTED)
         else registerReceiver(updateReceiver, filter)
         if (notesOn) ensureNotePermission()
+        // Check on launch so updates are offered without opening Settings.
+        shell.post { checkForUpdate(prompt = true) }
     }
 
     override fun onStop() {
@@ -254,8 +256,10 @@ class MainActivity : Activity() {
 
     internal var updateDownloadId = -1L
     internal var updateChecking = false
+    internal var updatePrompted = false
     internal var latestLine = ""
     internal var latestApk = ""
+    internal var latestVersion = ""
 
     internal val updateReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
