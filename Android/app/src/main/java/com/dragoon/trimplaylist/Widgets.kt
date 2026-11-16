@@ -193,6 +193,8 @@ internal fun MainActivity.titlesMatch(a: String, b: String): Boolean {
         val right = normalizeTrackTitle(b)
         if (left.isEmpty() || right.isEmpty()) return false
         if (left == right) return true
+        // Require long titles for substring match — short names caused false Online→file replaces.
+        if (left.length < 12 || right.length < 12) return false
         return left.contains(right) || right.contains(left)
     }
 
@@ -282,12 +284,15 @@ internal fun MainActivity.replaceOnlineWithLocal(local: Track) {
         }
         var resumeIndex = -1
         var resumeMs = 0
+        val touchesCurrent = matches.any { it == library.currentTrack }
+        // Only cancel the live stream when the playing Online row is the one being replaced.
+        if (touchesCurrent) {
+            streamGen += 1
+            streamBusy = false
+        }
         matches.forEachIndexed { order, index ->
             val previous = tracks[index]
             val keepThumb = local.thumb.isBlank() && previous.thumb.isNotBlank()
-            // Cancel any in-flight Online stream before the row becomes a local file.
-            streamGen += 1
-            streamBusy = false
             purgeTrackData(previous, dropThumb = !keepThumb)
             if (order == matches.lastIndex) {
                 if (local.artist.isBlank()) local.artist = previous.artist
@@ -308,7 +313,7 @@ internal fun MainActivity.replaceOnlineWithLocal(local: Track) {
                 }
             }
         }
-        // Switch playback to the saved file immediately so Play no longer streams.
+        // Switch playback to the saved file only when that Online row was actually playing.
         if (resumeIndex >= 0) play(resumeIndex, resumeMs)
     }
 

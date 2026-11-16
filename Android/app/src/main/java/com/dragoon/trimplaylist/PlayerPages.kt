@@ -119,7 +119,8 @@ internal fun MainActivity.playerPage(): View {
         controls.addView(iconButton(if (library.shuffle) "shuffle" else "shuffle", false, library.shuffle) {
             library.shuffle = !library.shuffle
             library.save()
-            show()
+            // Avoid full Player rebuild (surface tear-down) for a toggle.
+            refreshChrome()
         })
         controls.addView(iconButton("prev", false, false) { step(-1) })
         playerPlay = iconButton(if (engine.playing()) "pause" else "play", true, false) { togglePlay() }
@@ -128,7 +129,7 @@ internal fun MainActivity.playerPage(): View {
         controls.addView(iconButton(if (library.repeatMode == 2) "repeat1" else "repeat", false, library.repeatMode != 0) {
             library.repeatMode = (library.repeatMode + 1) % 3
             library.save()
-            show()
+            refreshChrome()
         })
         root.addView(controls)
         root.addView(View(this), LinearLayout.LayoutParams(1, 0, 1f))

@@ -544,7 +544,7 @@ internal fun MainActivity.offerDownloadedTracks(saved: List<Pair<Track, String>>
             }
             library.save()
             toast("Added from Download/TrimPlaylist/")
-            show()
+            refreshAfterPlaylistChange()
         }
     }
 

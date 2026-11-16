@@ -320,6 +320,23 @@ class MainActivity : Activity() {
         if (requestCode == PICK_COOKIE) importCookie(data.data)
     }
 
+    /** Redraw playlist UI without tearing down an active Player surface / playhead. */
+    internal fun refreshAfterPlaylistChange() {
+        when (history.lastOrNull()) {
+            Page.PLAYER -> {
+                if (engine.ready) {
+                    val track = library.current().tracks.getOrNull(library.currentTrack)
+                    playerTitle?.text = track?.title ?: "Select a track"
+                    playerArtist?.text = track?.let { trackLine(it) } ?: " "
+                    refreshChrome()
+                } else {
+                    show()
+                }
+            }
+            else -> show()
+        }
+    }
+
     internal fun show() {
         playerSeek = null
         playerTime = null

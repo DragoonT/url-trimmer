@@ -183,7 +183,7 @@ internal fun MainActivity.addDownload() {
             }
             library.save()
             toast("Using files from Download/TrimPlaylist/")
-            show()
+            refreshAfterPlaylistChange()
         }
     }
 
@@ -208,7 +208,7 @@ internal fun MainActivity.addPickedMedia(data: Intent) {
             library.current().tracks += Track(name, uri.toString(), "file", mime.startsWith("video") || Library.looksLikeVideo(name))
         }
         library.save()
-        show()
+        refreshAfterPlaylistChange()
     }
 
 internal fun MainActivity.removeTrack(index: Int) {

@@ -163,6 +163,7 @@ internal fun MainActivity.addOnline(entries: List<Pair<String, String>>) {
         onlinePicked.clear()
         if (history.lastOrNull() == Page.ONLINE && history.size > 1) history.removeLast()
         toast("Added ${entries.size}")
-        show()
+        // Do not rebuild Player while a song is playing — that was stopping playback.
+        refreshAfterPlaylistChange()
     }
 
