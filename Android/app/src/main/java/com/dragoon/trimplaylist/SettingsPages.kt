@@ -78,23 +78,59 @@ internal fun MainActivity.newerVersion(remote: String, local: String): Boolean {
         return false
     }
 
+/** Throttled auto-check: forced on every open/start, and every ~45s while the app stays open. */
+internal fun MainActivity.maybeCheckUpdate(force: Boolean) {
+        val now = android.os.SystemClock.elapsedRealtime()
+        val gap = if (force) 2_500L else 45_000L
+        if (now - lastUpdateCheckMs < gap) return
+        lastUpdateCheckMs = now
+        checkForUpdate(prompt = true)
+    }
+
+internal fun MainActivity.fetchLatestJson(): JSONObject? {
+        val stamp = System.currentTimeMillis()
+        val urls = listOf(
+            "https://dragoont.github.io/url-trimmer/latest.json?t=$stamp",
+            "https://raw.githubusercontent.com/DragoonT/url-trimmer/main/docs/latest.json?t=$stamp",
+        )
+        for (url in urls) {
+            try {
+                val connection = (URL(url).openConnection() as java.net.HttpURLConnection).apply {
+                    connectTimeout = 12000
+                    readTimeout = 12000
+                    instanceFollowRedirects = true
+                    setRequestProperty("Cache-Control", "no-cache")
+                    setRequestProperty("Pragma", "no-cache")
+                    setRequestProperty("User-Agent", "TrimPlaylist/${BuildConfig.VERSION_NAME}")
+                }
+                val body = connection.inputStream.bufferedReader().use { it.readText() }
+                connection.disconnect()
+                if (body.isNotBlank()) return JSONObject(body)
+            } catch (_: Exception) {
+            }
+        }
+        return null
+    }
+
 internal fun MainActivity.checkForUpdate(prompt: Boolean = false) {
         if (updateChecking) return
         updateChecking = true
         latestLine = "Checking…"
-        if (history.last() == Page.SETTINGS) show()
+        if (history.lastOrNull() == Page.SETTINGS) show()
         thread {
             var line = "Latest version unavailable"
             var apk = ""
             var version = ""
             try {
-                // Bust CDN/cache so a warm app still sees the newest release.
-                val url = "https://dragoont.github.io/url-trimmer/latest.json?t=${System.currentTimeMillis()}"
-                val json = JSONObject(URL(url).readText())
-                version = json.optString("version")
-                if (version.isNotBlank()) {
-                    line = "Latest version $version"
-                    if (newerVersion(version, BuildConfig.VERSION_NAME)) apk = json.optString("android")
+                val json = fetchLatestJson()
+                if (json != null) {
+                    version = json.optString("version")
+                    if (version.isNotBlank()) {
+                        line = "Latest version $version"
+                        if (newerVersion(version, BuildConfig.VERSION_NAME)) {
+                            apk = json.optString("android")
+                        }
+                    }
                 }
             } catch (_: Exception) {
             }
@@ -103,15 +139,15 @@ internal fun MainActivity.checkForUpdate(prompt: Boolean = false) {
                 latestLine = line
                 latestApk = apk
                 latestVersion = version
-                if (history.last() == Page.SETTINGS) show()
+                if (history.lastOrNull() == Page.SETTINGS) show()
                 if (prompt && apk.isNotBlank()) offerUpdatePopup(version, apk)
             }
         }
     }
 
 internal fun MainActivity.offerUpdatePopup(version: String, apk: String) {
-        if (isFinishing || apk.isBlank() || updateBusy) return
-        if (updateOverlay != null || appModal != null) return
+        if (isFinishing || isDestroyed || apk.isBlank() || updateBusy) return
+        if (appModal != null) return
         val label = version.ifBlank { "a newer build" }
         appConfirm(
             title = "Update available",

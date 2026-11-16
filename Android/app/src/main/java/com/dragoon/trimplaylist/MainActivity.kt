@@ -143,6 +143,8 @@ class MainActivity : Activity() {
     internal val tick = object : Runnable {
         override fun run() {
             refreshClock()
+            // Keep checking while the app stays open so a new release can popup without quitting.
+            if (appInForeground) maybeCheckUpdate(force = false)
             ticker.postDelayed(this, 400)
         }
     }
@@ -223,6 +225,13 @@ class MainActivity : Activity() {
         if (notesOn) ensureNotePermission()
     }
 
+    override fun onStart() {
+        super.onStart()
+        appInForeground = true
+        // Check as soon as the activity is visible — warm process, no force-stop needed.
+        shell.post { maybeCheckUpdate(force = true) }
+    }
+
     override fun onResume() {
         super.onResume()
         // Resume in-app install after the user allows installs from this app.
@@ -231,15 +240,10 @@ class MainActivity : Activity() {
             pendingUpdateApk = ""
             installUpdateApk(File(pending))
         }
-        // Auto-check whenever the app is opened or brought back — not only after a full stop.
-        if (needsUpdateCheck) {
-            needsUpdateCheck = false
-            shell.post { checkForUpdate(prompt = true) }
-        }
     }
 
     override fun onStop() {
-        needsUpdateCheck = true
+        appInForeground = false
         library.positionMs = engine.position()
         library.save()
         super.onStop()
@@ -268,8 +272,8 @@ class MainActivity : Activity() {
     internal var updateBusy = false
     internal var pendingUpdateApk = ""
     internal var updateChecking = false
-    /** True until the first resume, and again after each onStop so reopen while warm still checks. */
-    internal var needsUpdateCheck = true
+    internal var appInForeground = false
+    internal var lastUpdateCheckMs = 0L
     internal var updateOverlay: View? = null
     internal var latestLine = ""
     internal var latestApk = ""
