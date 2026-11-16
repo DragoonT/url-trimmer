@@ -147,42 +147,118 @@ internal fun MainActivity.isMediaDownloadName(name: String): Boolean {
         if (lower.contains(" cover.") || lower.endsWith(".jpg") || lower.endsWith(".jpeg") ||
             lower.endsWith(".png") || lower.endsWith(".webp") || lower.endsWith(".gif")
         ) return false
-        return listOf(".mp4", ".m4a", ".mp3", ".aac", ".webm", ".mkv", ".mov", ".m4v", ".wav", ".ogg", ".flac")
-            .any { lower.endsWith(it) }
+        return listOf(
+            ".mp4", ".m4a", ".mp3", ".aac", ".webm", ".mkv", ".mov", ".m4v",
+            ".wav", ".ogg", ".oga", ".opus", ".flac", ".3gp",
+        ).any { lower.endsWith(it) }
     }
 
+internal fun MainActivity.appDownloadFolders(): List<File> = listOf(
+        trimDownloadDir(),
+        File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "TrimPlaylist"),
+        File(getExternalFilesDir(Environment.DIRECTORY_DOWNLOADS) ?: filesDir, "TrimPlaylist"),
+        legacyDownloadDir(),
+        File(getExternalFilesDir(null) ?: filesDir, "Downloads/TrimPlaylist"),
+        stagingDownloadDir(),
+    ).distinctBy { it.absolutePath }
+
+/** Collect TrimPlaylist media from MediaStore + app folders (scoped storage safe). */
 internal fun MainActivity.listTrimDownloads(): List<Pair<String, Uri>> {
         val found = linkedMapOf<String, Uri>()
+        fun put(name: String, uri: Uri) {
+            if (!isMediaDownloadName(name)) return
+            found.putIfAbsent(name, uri)
+        }
         if (Build.VERSION.SDK_INT >= 29) {
             val projection = arrayOf(
                 android.provider.MediaStore.MediaColumns._ID,
                 android.provider.MediaStore.MediaColumns.DISPLAY_NAME,
+                android.provider.MediaStore.MediaColumns.RELATIVE_PATH,
             )
-            contentResolver.query(
-                android.provider.MediaStore.Downloads.EXTERNAL_CONTENT_URI,
-                projection,
-                "${android.provider.MediaStore.MediaColumns.RELATIVE_PATH} LIKE ?",
-                arrayOf("%TrimPlaylist%"),
-                "${android.provider.MediaStore.MediaColumns.DATE_ADDED} DESC",
-            )?.use { cursor ->
-                val idCol = cursor.getColumnIndexOrThrow(android.provider.MediaStore.MediaColumns._ID)
-                val nameCol = cursor.getColumnIndexOrThrow(android.provider.MediaStore.MediaColumns.DISPLAY_NAME)
-                while (cursor.moveToNext()) {
-                    val name = cursor.getString(nameCol) ?: continue
-                    if (!isMediaDownloadName(name)) continue
-                    val id = cursor.getLong(idCol)
-                    val uri = Uri.withAppendedPath(android.provider.MediaStore.Downloads.EXTERNAL_CONTENT_URI, id.toString())
-                    found.putIfAbsent(name, uri)
+            val collections = buildList {
+                add(android.provider.MediaStore.Downloads.EXTERNAL_CONTENT_URI)
+                add(android.provider.MediaStore.Audio.Media.EXTERNAL_CONTENT_URI)
+                add(android.provider.MediaStore.Video.Media.EXTERNAL_CONTENT_URI)
+                if (Build.VERSION.SDK_INT >= 30) {
+                    add(android.provider.MediaStore.Files.getContentUri("external"))
+                }
+            }
+            data class Query(val where: String, val args: Array<String>, val ownedOnly: Boolean)
+            val queries = listOf(
+                Query(
+                    "${android.provider.MediaStore.MediaColumns.RELATIVE_PATH} LIKE ?",
+                    arrayOf("%TrimPlaylist%"),
+                    false,
+                ),
+                Query(
+                    "${android.provider.MediaStore.MediaColumns.OWNER_PACKAGE_NAME}=?",
+                    arrayOf(packageName),
+                    true,
+                ),
+            )
+            for (collection in collections) {
+                for (query in queries) {
+                    try {
+                        contentResolver.query(
+                            collection,
+                            projection,
+                            query.where,
+                            query.args,
+                            "${android.provider.MediaStore.MediaColumns.DATE_ADDED} DESC",
+                        )?.use { cursor ->
+                            val idCol = cursor.getColumnIndex(android.provider.MediaStore.MediaColumns._ID)
+                            val nameCol = cursor.getColumnIndex(android.provider.MediaStore.MediaColumns.DISPLAY_NAME)
+                            val pathCol = cursor.getColumnIndex(android.provider.MediaStore.MediaColumns.RELATIVE_PATH)
+                            if (idCol < 0 || nameCol < 0) return@use
+                            while (cursor.moveToNext()) {
+                                val name = cursor.getString(nameCol) ?: continue
+                                val path = if (pathCol >= 0) cursor.getString(pathCol).orEmpty() else ""
+                                if (!query.ownedOnly && !path.contains("TrimPlaylist", ignoreCase = true)) continue
+                                if (query.ownedOnly && path.isNotBlank() &&
+                                    !path.contains("TrimPlaylist", ignoreCase = true) &&
+                                    !path.contains("Download", ignoreCase = true)
+                                ) continue
+                                val id = cursor.getLong(idCol)
+                                put(name, android.content.ContentUris.withAppendedId(collection, id))
+                            }
+                        }
+                    } catch (_: Exception) {
+                    }
                 }
             }
         }
-        listOf(trimDownloadDir(), legacyDownloadDir()).forEach { folder ->
-            folder.listFiles()?.filter { it.isFile }?.sortedByDescending { it.lastModified() }?.forEach { file ->
-                if (!isMediaDownloadName(file.name)) return@forEach
-                found.putIfAbsent(file.name, Uri.fromFile(file))
+        appDownloadFolders().forEach { folder ->
+            val files = runCatching { folder.listFiles() }.getOrNull() ?: return@forEach
+            files.filter { it.isFile }.sortedByDescending { it.lastModified() }.forEach { file ->
+                put(file.name, Uri.fromFile(file))
             }
         }
         return found.map { (name, uri) -> name to uri }
+    }
+
+internal fun MainActivity.needsMediaReadPermission(): Boolean {
+        return when {
+            Build.VERSION.SDK_INT >= 33 -> {
+                checkSelfPermission(Manifest.permission.READ_MEDIA_AUDIO) != PackageManager.PERMISSION_GRANTED &&
+                    checkSelfPermission(Manifest.permission.READ_MEDIA_VIDEO) != PackageManager.PERMISSION_GRANTED
+            }
+            Build.VERSION.SDK_INT >= 29 -> {
+                checkSelfPermission(Manifest.permission.READ_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED
+            }
+            else -> false
+        }
+    }
+
+internal fun MainActivity.requestMediaReadPermission() {
+        val perms = when {
+            Build.VERSION.SDK_INT >= 33 -> arrayOf(
+                Manifest.permission.READ_MEDIA_AUDIO,
+                Manifest.permission.READ_MEDIA_VIDEO,
+            )
+            Build.VERSION.SDK_INT >= 29 -> arrayOf(Manifest.permission.READ_EXTERNAL_STORAGE)
+            else -> return
+        }
+        requestPermissions(perms, 45)
     }
 
 internal fun MainActivity.normalizeTrackTitle(title: String): String =

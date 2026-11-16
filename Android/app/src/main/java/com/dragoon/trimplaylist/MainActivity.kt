@@ -289,6 +289,9 @@ class MainActivity : Activity() {
             noteDenied = grantResults.firstOrNull() != PackageManager.PERMISSION_GRANTED
             if (!noteDenied) syncSession(true)
         }
+        if (requestCode == 45 && grantResults.any { it == PackageManager.PERMISSION_GRANTED }) {
+            addDownload()
+        }
     }
 
     @Deprecated("Phone back stack")

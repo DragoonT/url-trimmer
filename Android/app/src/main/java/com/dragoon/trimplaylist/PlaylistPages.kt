@@ -165,14 +165,28 @@ internal fun MainActivity.playlistMenu(index: Int) {
     }
 
 internal fun MainActivity.addDownload() {
-        val used = library.current().tracks.map { it.uri }.toSet()
-        val files = listTrimDownloads().filter { (_, uri) -> uri.toString() !in used }
+        if (needsMediaReadPermission()) {
+            toast("Allow music/video access to see Download/TrimPlaylist")
+            requestMediaReadPermission()
+            return
+        }
+        val usedUris = library.current().tracks.map { it.uri }.toSet()
+        val usedNames = library.current().tracks.map { normalizeTrackTitle(it.title) }.toSet()
+        val all = listTrimDownloads()
+        val files = all.filter { (name, uri) ->
+            uri.toString() !in usedUris && normalizeTrackTitle(name) !in usedNames
+        }
         if (files.isEmpty()) {
-            toast("No downloads in Download/TrimPlaylist/")
+            toast(
+                when {
+                    all.isNotEmpty() -> "All downloads are already in this playlist"
+                    else -> "No media found in Download/TrimPlaylist/"
+                },
+            )
             return
         }
         val labels = files.map { (name, uri) -> friendlyDownloadPath(uri, name) }.toTypedArray()
-        val checked = BooleanArray(files.size)
+        val checked = BooleanArray(files.size) { true }
         appMultiChoice("Add download", labels, checked, confirmLabel = "Add", cancelLabel = "Cancel") { picked ->
             files.forEachIndexed { index, (name, uri) ->
                 if (!picked[index]) return@forEachIndexed
