@@ -133,7 +133,8 @@ internal fun MainActivity.detailPage(): View {
                 toast("Add a song first")
             } else {
                 val start = if (library.currentTrack in playlist.tracks.indices) library.currentTrack else 0
-                play(start, if (start == library.currentTrack) library.positionMs else 0)
+                val seek = if (start == library.currentTrack) engine.position().coerceAtLeast(0) else 0
+                play(start, seek)
             }
         })
         root.addView(actions)
@@ -284,7 +285,12 @@ internal fun MainActivity.trackRow(index: Int, track: Track, songs: LinearLayout
             gravity = Gravity.CENTER_VERTICAL
             setPadding(0, px(8), 0, px(8))
             if (index == library.currentTrack) setBackgroundColor(selected)
-            setOnClickListener { play(songs.indexOfChild(this).coerceAtLeast(0), 0) }
+            setOnClickListener {
+                val at = songs.indexOfChild(this).coerceAtLeast(0)
+                // Same track: keep current position (Queue used to always restart at 0).
+                val seek = if (at == library.currentTrack) engine.position().coerceAtLeast(0) else 0
+                play(at, seek)
+            }
         }
         row.addView(artView(track, px(46), px(46)))
         val info = column(px(10), 0, 0, 0)

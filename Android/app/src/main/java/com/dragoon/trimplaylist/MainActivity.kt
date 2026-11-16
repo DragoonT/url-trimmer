@@ -124,6 +124,9 @@ class MainActivity : Activity() {
     internal var playerTitle: TextView? = null
     internal var playerArtist: TextView? = null
     internal var videoHost: FrameLayout? = null
+    /** Reused across Player/Queue/Fullscreen rebuilds so video playhead does not jump. */
+    internal var videoTexture: TextureView? = null
+    internal var savedVideoSurfaceTexture: android.graphics.SurfaceTexture? = null
     internal var motion = 0
     internal var closingSheet = false
     internal lateinit var session: MediaSession
@@ -263,6 +266,7 @@ class MainActivity : Activity() {
         ticker.removeCallbacks(tick)
         PlaybackBridge.onAction = null
         noteKey = ""
+        releasePersistentVideo(force = true)
         stopService(Intent(this, PlaybackService::class.java))
         session.release()
         engine.release()
@@ -422,6 +426,8 @@ class MainActivity : Activity() {
         fun attach(next: Surface) {
             surface = next
             if (videoMode) try { player.setSurface(next) } catch (_: IllegalStateException) {}
+            // If media is already running, only rebind the surface — never restart from a queued seek.
+            if (ready && queued == null) return
             queued?.let { (uri, seek) ->
                 queued = null
                 play(uri, true, seek, queuedGain, queuedOnline)

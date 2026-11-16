@@ -338,8 +338,9 @@ internal fun MainActivity.beginPlay(index: Int, uri: Uri, video: Boolean, seekMs
         val gain = track?.volume ?: 1f
         library.positionMs = seekMs
         library.save()
+        if (!video) releasePersistentVideo(force = true)
         val onPlayer = history.lastOrNull() == Page.PLAYER
-        if (video && engine.surface == null) {
+        if (video && engine.surface == null && videoTexture?.isAvailable != true) {
             engine.queue(uri, seekMs, gain, online)
         } else {
             engine.play(uri, video, seekMs, gain, online)
@@ -348,9 +349,8 @@ internal fun MainActivity.beginPlay(index: Int, uri: Uri, video: Boolean, seekMs
             open(Page.PLAYER)
             return
         }
-        // Rebuilding the player page tears down TextureView and stops media. Only rebuild when
-        // the surface layout must change (audio <-> video); otherwise refresh labels in place.
-        val needRebuild = previous?.video != track?.video || (video && engine.surface == null)
+        // Only rebuild when audio <-> video layout must change; otherwise keep the page (and surface).
+        val needRebuild = previous?.video != track?.video || (video && engine.surface == null && videoTexture?.isAvailable != true)
         if (needRebuild) {
             motion = 0
             show()
@@ -441,27 +441,71 @@ internal fun MainActivity.qualityMenu() {
         appChoices("Quality", options) { which ->
             playbackQuality = options[which]
             toast(if (which == 0) "Playing the file's own quality" else "This file has one copy. Source is its quality.")
-            show()
+            // Do not rebuild the player page — that used to tear down video and jump the playhead.
         }
     }
 
+/**
+ * One TextureView for the whole activity. Rebuilding Player (Queue close, Fullscreen,
+ * Source, shuffle) used to destroy the surface and rewind playback — keep it alive.
+ */
 internal fun MainActivity.videoFrame(height: Int): FrameLayout {
         val frame = FrameLayout(this).apply { setBackgroundColor(Color.BLACK) }
-        val texture = TextureView(this).apply {
-            surfaceTextureListener = object : TextureView.SurfaceTextureListener {
+        val texture = videoTexture ?: TextureView(this).also { tv ->
+            videoTexture = tv
+            tv.surfaceTextureListener = object : TextureView.SurfaceTextureListener {
                 override fun onSurfaceTextureAvailable(st: android.graphics.SurfaceTexture, w: Int, h: Int) {
+                    savedVideoSurfaceTexture = st
                     engine.attach(Surface(st))
                 }
                 override fun onSurfaceTextureSizeChanged(st: android.graphics.SurfaceTexture, w: Int, h: Int) = Unit
                 override fun onSurfaceTextureDestroyed(st: android.graphics.SurfaceTexture): Boolean {
+                    // Keep SurfaceTexture while media is active so Queue/Fullscreen do not seek backward.
+                    if (engine.ready) {
+                        savedVideoSurfaceTexture = st
+                        return false
+                    }
                     engine.detach()
+                    savedVideoSurfaceTexture = null
+                    videoTexture = null
                     return true
                 }
                 override fun onSurfaceTextureUpdated(st: android.graphics.SurfaceTexture) = Unit
             }
         }
+        (texture.parent as? ViewGroup)?.removeView(texture)
+        val kept = savedVideoSurfaceTexture
+        if (kept != null && !texture.isAvailable) {
+            try {
+                texture.setSurfaceTexture(kept)
+            } catch (_: Exception) {
+            }
+        }
         frame.addView(texture, FrameLayout.LayoutParams(MATCH, if (height == MATCH) MATCH else height))
+        if (texture.isAvailable) {
+            val st = texture.surfaceTexture
+            if (st != null) {
+                savedVideoSurfaceTexture = st
+                engine.attach(Surface(st))
+            }
+        }
         return frame
+    }
+
+internal fun MainActivity.releasePersistentVideo(force: Boolean = false) {
+        if (!force && engine.ready) return
+        engine.detach()
+        savedVideoSurfaceTexture?.let { st ->
+            try {
+                st.release()
+            } catch (_: Exception) {
+            }
+        }
+        savedVideoSurfaceTexture = null
+        videoTexture?.let { tv ->
+            (tv.parent as? ViewGroup)?.removeView(tv)
+        }
+        videoTexture = null
     }
 
 internal fun MainActivity.lineView(track: Track): TextView {
