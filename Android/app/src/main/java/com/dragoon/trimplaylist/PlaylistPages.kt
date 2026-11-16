@@ -229,11 +229,12 @@ internal fun MainActivity.removeTrack(index: Int) {
         val tracks = library.current().tracks
         if (index !in tracks.indices) return
         val removed = tracks[index]
-        // Remove Online/Download saved data first, then drop the playlist row — do not leave files saved.
-        streamGen += 1
-        streamBusy = false
+        // Drop the playlist row only — keep Download/TrimPlaylist files for Add download.
+        if (library.currentTrack == index) {
+            streamGen += 1
+            streamBusy = false
+        }
         purgeTrackData(removed)
-        purgeMatchingDownloads(removed)
         tracks.removeAt(index)
         when {
             library.currentTrack == index -> {

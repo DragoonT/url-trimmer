@@ -319,33 +319,19 @@ internal fun MainActivity.deleteTrimPlaylistUri(raw: String) {
         }
     }
 
-internal fun MainActivity.purgeTrackData(track: Track, dropThumb: Boolean = true) {
+/**
+ * Clear in-memory meta for a playlist row only.
+ * Downloaded media in Download/TrimPlaylist stays on disk so Add download can use it again.
+ */
+internal fun MainActivity.purgeTrackData(track: Track) {
         metaCache.remove(track.uri)
         artCache.remove(track.uri)
         metaLoading.remove(track.uri)
-        // Drop saved Online/Download extras first — do not keep orphan thumbs or TrimPlaylist files.
-        if (dropThumb && track.thumb.isNotBlank()) deleteTrimPlaylistUri(track.thumb)
-        if (track.kind == "file" && isTrimPlaylistUri(track.uri)) deleteTrimPlaylistUri(track.uri)
+        // Never delete Download/TrimPlaylist media from a playlist remove — only drop the row.
         if (streamPageUri == track.uri) {
             streamPageUri = ""
             streamHeaders = emptyMap()
             streamAudioOnly = false
-        }
-    }
-
-/** When removing Online, also delete matching Download/TrimPlaylist media so nothing stays saved. */
-internal fun MainActivity.purgeMatchingDownloads(track: Track) {
-        if (track.kind != "online") return
-        val used = library.playlists.asSequence()
-            .flatMap { it.tracks.asSequence() }
-            .filter { it.kind == "file" && it.uri != track.uri }
-            .map { it.uri }
-            .toSet()
-        listTrimDownloads().forEach { (name, uri) ->
-            if (!titlesMatch(name, track.title)) return@forEach
-            val raw = uri.toString()
-            if (raw in used) return@forEach
-            deleteTrimPlaylistUri(raw)
         }
     }
 
@@ -368,12 +354,11 @@ internal fun MainActivity.replaceOnlineWithLocal(local: Track) {
         }
         matches.forEachIndexed { order, index ->
             val previous = tracks[index]
-            val keepThumb = local.thumb.isBlank() && previous.thumb.isNotBlank()
-            purgeTrackData(previous, dropThumb = !keepThumb)
+            purgeTrackData(previous)
             if (order == matches.lastIndex) {
                 if (local.artist.isBlank()) local.artist = previous.artist
                 if (local.durationMs <= 0) local.durationMs = previous.durationMs
-                if (keepThumb) local.thumb = previous.thumb
+                if (local.thumb.isBlank() && previous.thumb.isNotBlank()) local.thumb = previous.thumb
                 tracks[index] = local
                 if (library.currentTrack == index) {
                     resumeIndex = index
