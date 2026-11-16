@@ -544,15 +544,9 @@ internal fun MainActivity.offerDownloadedTracks(saved: List<Pair<Track, String>>
             .setPositiveButton("Add") { _, _ ->
                 saved.forEachIndexed { index, (local, _) ->
                     if (!checked[index]) return@forEachIndexed
-                    // Replace matching online rows so Play uses storage, not the stream.
-                    val tracks = library.current().tracks
-                    val onlineMatch = tracks.indexOfFirst { track ->
-                        track.kind == "online" && (
-                            track.title.equals(local.title, true) ||
-                                track.title.substringBefore(" · ").equals(local.title.substringBefore(" · "), true)
-                            )
-                    }
-                    if (onlineMatch >= 0) tracks[onlineMatch] = local else tracks += local
+                    // Replace matching Online rows so Play uses storage, not the stream.
+                    replaceOnlineWithLocal(local)
+                    ensureMeta(local)
                 }
                 library.save()
                 toast("Added from Download/TrimPlaylist/")

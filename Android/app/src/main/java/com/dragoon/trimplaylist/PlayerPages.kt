@@ -91,7 +91,8 @@ internal fun MainActivity.playerPage(): View {
             })
         }
         root.addView(spaceH(18))
-        root.addView(label(track?.title ?: "Select a track", 22f, ink(), true))
+        playerTitle = label(track?.title ?: "Select a track", 22f, ink(), true)
+        root.addView(playerTitle)
         playerArtist = muted(track?.let { trackLine(it) } ?: " ")
         root.addView(playerArtist)
         val times = row().apply { gravity = Gravity.CENTER_VERTICAL; setPadding(0, px(16), 0, 0) }
@@ -260,6 +261,13 @@ internal fun MainActivity.refreshChrome() {
         refreshMini()
     }
 
+internal fun MainActivity.isLocalTrack(track: Track): Boolean {
+        if (track.kind == "file") return true
+        val uri = track.uri
+        return uri.startsWith("content:") || uri.startsWith("file:") ||
+            (uri.startsWith("/") && !uri.startsWith("//"))
+    }
+
 internal fun MainActivity.play(index: Int, seekMs: Int) {
         warnNotesOff()
         val track = library.current().tracks.getOrNull(index) ?: return
@@ -268,9 +276,16 @@ internal fun MainActivity.play(index: Int, seekMs: Int) {
             return
         }
         // Local / saved downloads must never go through the online stream path.
-        val local = track.kind == "file" || track.uri.startsWith("content:") || track.uri.startsWith("file:") ||
-            (track.uri.startsWith("/") && !track.uri.startsWith("//"))
-        if (!local && track.kind == "online" && (track.uri.contains("youtube.com") || track.uri.contains("youtu.be"))) {
+        if (isLocalTrack(track)) {
+            streamGen += 1
+            streamBusy = false
+            streamHeaders = emptyMap()
+            streamPageUri = ""
+            streamAudioOnly = false
+            beginPlay(index, Uri.parse(track.uri), track.video, seekMs, online = false)
+            return
+        }
+        if (track.kind == "online" && (track.uri.contains("youtube.com") || track.uri.contains("youtu.be"))) {
             val gen = ++streamGen
             streamBusy = true
             streamPageUri = track.uri
@@ -285,7 +300,7 @@ internal fun MainActivity.play(index: Int, seekMs: Int) {
                         if (gen != streamGen) return@runOnUiThread
                         streamBusy = false
                         streamHeaders = buildStreamHeaders(cookie)
-                        beginPlay(index, Uri.parse(stream), track.video, seekMs)
+                        beginPlay(index, Uri.parse(stream), track.video, seekMs, online = true)
                     }
                 } catch (error: Exception) {
                     runOnUiThread {
@@ -304,7 +319,7 @@ internal fun MainActivity.play(index: Int, seekMs: Int) {
         streamHeaders = emptyMap()
         streamPageUri = ""
         streamAudioOnly = false
-        beginPlay(index, Uri.parse(track.uri), track.video, seekMs)
+        beginPlay(index, Uri.parse(track.uri), track.video, seekMs, online = false)
     }
 
 internal fun MainActivity.buildStreamHeaders(cookie: String?): Map<String, String> {
@@ -316,19 +331,33 @@ internal fun MainActivity.buildStreamHeaders(cookie: String?): Map<String, Strin
         return headers
     }
 
-internal fun MainActivity.beginPlay(index: Int, uri: Uri, video: Boolean, seekMs: Int) {
+internal fun MainActivity.beginPlay(index: Int, uri: Uri, video: Boolean, seekMs: Int, online: Boolean = false) {
+        val previous = library.current().tracks.getOrNull(library.currentTrack)
         library.currentTrack = index
-        val gain = library.current().tracks.getOrNull(index)?.volume ?: 1f
+        val track = library.current().tracks.getOrNull(index)
+        val gain = track?.volume ?: 1f
         library.positionMs = seekMs
         library.save()
         val onPlayer = history.lastOrNull() == Page.PLAYER
-        if (video && engine.surface == null) engine.queue(uri, seekMs, gain) else engine.play(uri, video, seekMs, gain)
+        if (video && engine.surface == null) {
+            engine.queue(uri, seekMs, gain, online)
+        } else {
+            engine.play(uri, video, seekMs, gain, online)
+        }
         if (!onPlayer) {
             open(Page.PLAYER)
-        } else {
-            // Rebuild player chrome without relying on a second open(); keep playback alive.
+            return
+        }
+        // Rebuilding the player page tears down TextureView and stops media. Only rebuild when
+        // the surface layout must change (audio <-> video); otherwise refresh labels in place.
+        val needRebuild = previous?.video != track?.video || (video && engine.surface == null)
+        if (needRebuild) {
             motion = 0
             show()
+        } else {
+            playerTitle?.text = track?.title ?: "Select a track"
+            playerArtist?.text = track?.let { trackLine(it) } ?: " "
+            refreshChrome()
         }
     }
 
@@ -349,7 +378,8 @@ internal fun MainActivity.retryOnlineStream(fromMs: Int) {
                     streamBusy = false
                     streamHeaders = buildStreamHeaders(cookie)
                     val track = library.current().tracks.getOrNull(index) ?: return@runOnUiThread
-                    beginPlay(index, Uri.parse(stream), track.video, fromMs.coerceAtLeast(0))
+                    if (isLocalTrack(track)) return@runOnUiThread
+                    beginPlay(index, Uri.parse(stream), track.video, fromMs.coerceAtLeast(0), online = true)
                 }
             } catch (error: Exception) {
                 runOnUiThread {

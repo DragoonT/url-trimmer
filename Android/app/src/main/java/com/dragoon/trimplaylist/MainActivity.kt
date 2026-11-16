@@ -121,6 +121,7 @@ class MainActivity : Activity() {
     internal var playerTime: TextView? = null
     internal var playerTotal: TextView? = null
     internal var playerPlay: Glyph? = null
+    internal var playerTitle: TextView? = null
     internal var playerArtist: TextView? = null
     internal var videoHost: FrameLayout? = null
     internal var motion = 0
@@ -314,6 +315,7 @@ class MainActivity : Activity() {
         playerTime = null
         playerTotal = null
         playerPlay = null
+        playerTitle = null
         playerArtist = null
         videoHost = null
         metaLabels.clear()
@@ -414,7 +416,10 @@ class MainActivity : Activity() {
         fun attach(next: Surface) {
             surface = next
             if (videoMode) try { player.setSurface(next) } catch (_: IllegalStateException) {}
-            queued?.let { (uri, seek) -> queued = null; play(uri, true, seek, queuedGain) }
+            queued?.let { (uri, seek) ->
+                queued = null
+                play(uri, true, seek, queuedGain, queuedOnline)
+            }
         }
 
         fun detach() {
@@ -422,24 +427,36 @@ class MainActivity : Activity() {
             surface = null
         }
 
-        fun queue(uri: Uri, seekMs: Int, gain: Float) { queued = uri to seekMs; queuedGain = gain; videoMode = true }
+        private var queuedOnline = false
+        fun queue(uri: Uri, seekMs: Int, gain: Float, online: Boolean = false) {
+            queued = uri to seekMs
+            queuedGain = gain
+            queuedOnline = online
+            videoMode = true
+        }
 
-        fun play(uri: Uri, video: Boolean, seekMs: Int, gain: Float = trackGain) {
+        fun play(uri: Uri, video: Boolean, seekMs: Int, gain: Float = trackGain, online: Boolean = false) {
             trackGain = gain.coerceIn(0.5f, 5f)
             val current = ++token
             ready = false
             videoMode = video
             queued = null
             streamRetries = 0
-            onlineUri = uri.host?.contains("googlevideo") == true || streamPageUri.isNotBlank()
+            // Only treat as online when this play request is an Online stream — never because
+            // a previous Online page URL is still sitting in streamPageUri after switching offline.
+            onlineUri = online && (uri.scheme == "http" || uri.scheme == "https")
+            if (!onlineUri) {
+                streamPageUri = ""
+                streamHeaders = emptyMap()
+            }
             getSystemService(AudioManager::class.java).requestAudioFocus(focusRequest)
             try {
                 player.reset()
                 player.setWakeMode(this@MainActivity, android.os.PowerManager.PARTIAL_WAKE_LOCK)
                 player.setAudioAttributes(audioAttributes())
                 val headers = when {
-                    streamHeaders.isNotEmpty() && (uri.scheme == "http" || uri.scheme == "https") -> streamHeaders
-                    uri.host?.contains("googlevideo") == true -> mapOf(
+                    onlineUri && streamHeaders.isNotEmpty() -> streamHeaders
+                    onlineUri && uri.host?.contains("googlevideo") == true -> mapOf(
                         "User-Agent" to "com.google.android.youtube/20.10.38 (Linux; U; Android 11) gzip",
                         "Referer" to "https://www.youtube.com/",
                     )
@@ -462,7 +479,16 @@ class MainActivity : Activity() {
                     if (current != token) return@setOnErrorListener true
                     val position = try { player.currentPosition } catch (_: IllegalStateException) { seekMs }
                     ready = false
-                    if (onlineUri && streamPageUri.isNotBlank() && streamRetries < 2) {
+                    // Offline / saved files must never fall back into the Online reconnect path.
+                    val currentTrack = library.current().tracks.getOrNull(library.currentTrack)
+                    if (currentTrack != null && isLocalTrack(currentTrack)) {
+                        onlineUri = false
+                        streamPageUri = ""
+                        streamHeaders = emptyMap()
+                        toast("Couldn't play that track")
+                        return@setOnErrorListener true
+                    }
+                    if (onlineUri && streamPageUri.isNotBlank() && streamRetries < 4) {
                         streamRetries += 1
                         toast("Reconnecting stream…")
                         retryOnlineStream(position)

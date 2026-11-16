@@ -141,6 +141,16 @@ internal fun MainActivity.publishToTrimPlaylist(source: File): Pair<Uri, String>
         return Uri.fromFile(dest) to friendlyDownloadPath(dest)
     }
 
+internal fun MainActivity.isMediaDownloadName(name: String): Boolean {
+        val lower = name.lowercase()
+        if (lower.endsWith(".video.mp4") || lower.endsWith(".audio.m4a")) return false
+        if (lower.contains(" cover.") || lower.endsWith(".jpg") || lower.endsWith(".jpeg") ||
+            lower.endsWith(".png") || lower.endsWith(".webp") || lower.endsWith(".gif")
+        ) return false
+        return listOf(".mp4", ".m4a", ".mp3", ".aac", ".webm", ".mkv", ".mov", ".m4v", ".wav", ".ogg", ".flac")
+            .any { lower.endsWith(it) }
+    }
+
 internal fun MainActivity.listTrimDownloads(): List<Pair<String, Uri>> {
         val found = linkedMapOf<String, Uri>()
         if (Build.VERSION.SDK_INT >= 29) {
@@ -159,6 +169,7 @@ internal fun MainActivity.listTrimDownloads(): List<Pair<String, Uri>> {
                 val nameCol = cursor.getColumnIndexOrThrow(android.provider.MediaStore.MediaColumns.DISPLAY_NAME)
                 while (cursor.moveToNext()) {
                     val name = cursor.getString(nameCol) ?: continue
+                    if (!isMediaDownloadName(name)) continue
                     val id = cursor.getLong(idCol)
                     val uri = Uri.withAppendedPath(android.provider.MediaStore.Downloads.EXTERNAL_CONTENT_URI, id.toString())
                     found.putIfAbsent(name, uri)
@@ -167,11 +178,138 @@ internal fun MainActivity.listTrimDownloads(): List<Pair<String, Uri>> {
         }
         listOf(trimDownloadDir(), legacyDownloadDir()).forEach { folder ->
             folder.listFiles()?.filter { it.isFile }?.sortedByDescending { it.lastModified() }?.forEach { file ->
-                if (file.name.endsWith(".video.mp4") || file.name.endsWith(".audio.m4a")) return@forEach
+                if (!isMediaDownloadName(file.name)) return@forEach
                 found.putIfAbsent(file.name, Uri.fromFile(file))
             }
         }
         return found.map { (name, uri) -> name to uri }
+    }
+
+internal fun MainActivity.normalizeTrackTitle(title: String): String =
+        title.substringBefore(" · ").substringBeforeLast('.').trim().lowercase()
+
+internal fun MainActivity.titlesMatch(a: String, b: String): Boolean {
+        val left = normalizeTrackTitle(a)
+        val right = normalizeTrackTitle(b)
+        if (left.isEmpty() || right.isEmpty()) return false
+        if (left == right) return true
+        return left.contains(right) || right.contains(left)
+    }
+
+internal fun MainActivity.isTrimPlaylistUri(raw: String): Boolean {
+        if (raw.isBlank() || raw.startsWith("embedded:")) return false
+        if (raw.contains("Download/TrimPlaylist", ignoreCase = true) || raw.contains("/TrimPlaylist/")) return true
+        return try {
+            val uri = Uri.parse(raw)
+            when (uri.scheme) {
+                "content" -> {
+                    contentResolver.query(
+                        uri,
+                        arrayOf(android.provider.MediaStore.MediaColumns.RELATIVE_PATH, android.provider.MediaStore.MediaColumns.DISPLAY_NAME),
+                        null,
+                        null,
+                        null,
+                    )?.use { cursor ->
+                        if (!cursor.moveToFirst()) return false
+                        val path = cursor.getString(0).orEmpty()
+                        path.contains("TrimPlaylist")
+                    } ?: false
+                }
+                "file" -> {
+                    val path = uri.path.orEmpty()
+                    path.contains("TrimPlaylist") ||
+                        path.contains("/files/Downloads/") ||
+                        path.contains("/trim-dl/")
+                }
+                else -> false
+            }
+        } catch (_: Exception) {
+            false
+        }
+    }
+
+internal fun MainActivity.deleteTrimPlaylistUri(raw: String) {
+        if (!isTrimPlaylistUri(raw)) return
+        try {
+            val uri = Uri.parse(raw)
+            when (uri.scheme) {
+                "content" -> contentResolver.delete(uri, null, null)
+                "file" -> File(uri.path ?: return).takeIf { it.exists() }?.delete()
+                null -> File(raw).takeIf { it.isAbsolute && it.exists() }?.delete()
+            }
+        } catch (_: Exception) {
+        }
+    }
+
+internal fun MainActivity.purgeTrackData(track: Track, dropThumb: Boolean = true) {
+        metaCache.remove(track.uri)
+        artCache.remove(track.uri)
+        metaLoading.remove(track.uri)
+        // Drop saved Online/Download extras first — do not keep orphan thumbs or TrimPlaylist files.
+        if (dropThumb && track.thumb.isNotBlank()) deleteTrimPlaylistUri(track.thumb)
+        if (track.kind == "file" && isTrimPlaylistUri(track.uri)) deleteTrimPlaylistUri(track.uri)
+        if (streamPageUri == track.uri) {
+            streamPageUri = ""
+            streamHeaders = emptyMap()
+            streamAudioOnly = false
+        }
+    }
+
+/** When removing Online, also delete matching Download/TrimPlaylist media so nothing stays saved. */
+internal fun MainActivity.purgeMatchingDownloads(track: Track) {
+        if (track.kind != "online") return
+        val used = library.playlists.asSequence()
+            .flatMap { it.tracks.asSequence() }
+            .filter { it.kind == "file" && it.uri != track.uri }
+            .map { it.uri }
+            .toSet()
+        listTrimDownloads().forEach { (name, uri) ->
+            if (!titlesMatch(name, track.title)) return@forEach
+            val raw = uri.toString()
+            if (raw in used) return@forEach
+            deleteTrimPlaylistUri(raw)
+        }
+    }
+
+internal fun MainActivity.replaceOnlineWithLocal(local: Track) {
+        val tracks = library.current().tracks
+        val matches = tracks.mapIndexedNotNull { index, track ->
+            if (track.kind == "online" && titlesMatch(track.title, local.title)) index else null
+        }.asReversed()
+        if (matches.isEmpty()) {
+            tracks += local
+            return
+        }
+        var resumeIndex = -1
+        var resumeMs = 0
+        matches.forEachIndexed { order, index ->
+            val previous = tracks[index]
+            val keepThumb = local.thumb.isBlank() && previous.thumb.isNotBlank()
+            // Cancel any in-flight Online stream before the row becomes a local file.
+            streamGen += 1
+            streamBusy = false
+            purgeTrackData(previous, dropThumb = !keepThumb)
+            if (order == matches.lastIndex) {
+                if (local.artist.isBlank()) local.artist = previous.artist
+                if (local.durationMs <= 0) local.durationMs = previous.durationMs
+                if (keepThumb) local.thumb = previous.thumb
+                tracks[index] = local
+                if (library.currentTrack == index) {
+                    resumeIndex = index
+                    resumeMs = engine.position().coerceAtLeast(0)
+                }
+            } else {
+                tracks.removeAt(index)
+                if (library.currentTrack == index) {
+                    engine.stop()
+                    library.currentTrack = -1
+                } else if (library.currentTrack > index) {
+                    library.currentTrack -= 1
+                }
+            }
+        }
+        // Switch playback to the saved file immediately so Play no longer streams.
+        if (resumeIndex >= 0) play(resumeIndex, resumeMs)
     }
 
 internal fun MainActivity.displayName(uri: Uri): String {

@@ -180,22 +180,8 @@ internal fun MainActivity.addDownload() {
                 files.forEachIndexed { index, (name, uri) ->
                     if (!checked[index]) return@forEachIndexed
                     val title = name.substringBeforeLast('.')
-                    val path = uri.toString()
-                    val tracks = library.current().tracks
-                    val onlineMatch = tracks.indexOfFirst { track ->
-                        track.kind == "online" && track.title.substringBefore(" · ").equals(title, true)
-                    }
-                    val local = Track(title, path, "file", Library.looksLikeVideo(name))
-                    if (onlineMatch >= 0) {
-                        // Keep Online artist/thumb when replacing with the downloaded file.
-                        val previous = tracks[onlineMatch]
-                        local.artist = previous.artist
-                        local.durationMs = previous.durationMs
-                        local.thumb = previous.thumb
-                        tracks[onlineMatch] = local
-                    } else {
-                        tracks += local
-                    }
+                    val local = Track(title, uri.toString(), "file", Library.looksLikeVideo(name))
+                    replaceOnlineWithLocal(local)
                     ensureMeta(local)
                 }
                 library.save()
@@ -233,11 +219,18 @@ internal fun MainActivity.addPickedMedia(data: Intent) {
 internal fun MainActivity.removeTrack(index: Int) {
         val tracks = library.current().tracks
         if (index !in tracks.indices) return
+        val removed = tracks[index]
+        // Remove Online/Download saved data first, then drop the playlist row — do not leave files saved.
+        streamGen += 1
+        streamBusy = false
+        purgeTrackData(removed)
+        purgeMatchingDownloads(removed)
         tracks.removeAt(index)
         when {
             library.currentTrack == index -> {
                 engine.stop()
                 library.currentTrack = -1
+                library.positionMs = 0
             }
             library.currentTrack > index -> library.currentTrack -= 1
         }
