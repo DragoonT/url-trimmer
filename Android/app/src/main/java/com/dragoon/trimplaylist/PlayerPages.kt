@@ -438,11 +438,11 @@ internal fun MainActivity.onTrackEnded() {
 
 internal fun MainActivity.qualityMenu() {
         val options = arrayOf("Source", "1080p", "720p", "480p", "360p")
-        AlertDialog.Builder(this).setTitle("Quality").setItems(options) { _, which ->
+        appChoices("Quality", options) { which ->
             playbackQuality = options[which]
             toast(if (which == 0) "Playing the file's own quality" else "This file has one copy. Source is its quality.")
             show()
-        }.show()
+        }
     }
 
 internal fun MainActivity.videoFrame(height: Int): FrameLayout {

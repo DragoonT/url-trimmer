@@ -151,9 +151,8 @@ internal fun MainActivity.detailPage(): View {
 internal fun MainActivity.playlistMenu(index: Int) {
         val here = index == library.selected && history.last() == Page.DETAIL
         val items = if (here) arrayOf("Add files", "Add download", "Online", "Rename", "Delete") else arrayOf("Open", "Rename", "Delete")
-        AlertDialog.Builder(this).setItems(items) { _, which ->
-            val action = items[which]
-            when (action) {
+        appChoices("Playlist", items) { which ->
+            when (items[which]) {
                 "Open" -> { library.selected = index; open(Page.DETAIL) }
                 "Add files" -> pickMedia()
                 "Add download" -> addDownload()
@@ -161,7 +160,7 @@ internal fun MainActivity.playlistMenu(index: Int) {
                 "Rename" -> renamePlaylist(index)
                 "Delete" -> deletePlaylist(index)
             }
-        }.show()
+        }
     }
 
 internal fun MainActivity.addDownload() {
@@ -173,23 +172,18 @@ internal fun MainActivity.addDownload() {
         }
         val labels = files.map { (name, uri) -> friendlyDownloadPath(uri, name) }.toTypedArray()
         val checked = BooleanArray(files.size)
-        AlertDialog.Builder(this)
-            .setTitle("Add download")
-            .setMultiChoiceItems(labels, checked) { _, which, on -> checked[which] = on }
-            .setPositiveButton("Add") { _, _ ->
-                files.forEachIndexed { index, (name, uri) ->
-                    if (!checked[index]) return@forEachIndexed
-                    val title = name.substringBeforeLast('.')
-                    val local = Track(title, uri.toString(), "file", Library.looksLikeVideo(name))
-                    replaceOnlineWithLocal(local)
-                    ensureMeta(local)
-                }
-                library.save()
-                toast("Using files from Download/TrimPlaylist/")
-                show()
+        appMultiChoice("Add download", labels, checked, confirmLabel = "Add", cancelLabel = "Cancel") { picked ->
+            files.forEachIndexed { index, (name, uri) ->
+                if (!picked[index]) return@forEachIndexed
+                val title = name.substringBeforeLast('.')
+                val local = Track(title, uri.toString(), "file", Library.looksLikeVideo(name))
+                replaceOnlineWithLocal(local)
+                ensureMeta(local)
             }
-            .setNegativeButton("Cancel", null)
-            .show()
+            library.save()
+            toast("Using files from Download/TrimPlaylist/")
+            show()
+        }
     }
 
 internal fun MainActivity.pickMedia() {
@@ -258,42 +252,7 @@ internal fun MainActivity.renamePlaylist(index: Int) {
     }
 
 internal fun MainActivity.prompt(title: String, value: String, ok: String, done: (String) -> Unit) {
-        val input = EditText(this).apply {
-            setText(value)
-            hint = "Playlist name"
-            setTextColor(ink())
-            setHintTextColor(soft())
-            background = rounded(fieldBg(), 10)
-            setPadding(px(12), px(12), px(12), px(12))
-            setSingleLine(true)
-        }
-        val box = column(px(18), px(18), px(18), px(12)).apply { setBackgroundColor(dialogBg()) }
-        box.addView(label(title, 18f, ink(), true))
-        box.addView(spaceH(12))
-        box.addView(input)
-        val buttons = row().apply { gravity = Gravity.END; setPadding(0, px(8), 0, 0) }
-        val dialog = AlertDialog.Builder(this).setView(box).create()
-        buttons.addView(TextView(this).apply {
-            text = "Cancel"
-            setTextColor(soft())
-            textSize = 15f
-            setPadding(px(12), px(10), px(12), px(10))
-            setOnClickListener { dialog.dismiss() }
-        })
-        buttons.addView(TextView(this).apply {
-            text = ok
-            setTextColor(if (dark) Color.WHITE else BRAND)
-            textSize = 15f
-            setTypeface(typeface, Typeface.BOLD)
-            setPadding(px(12), px(10), px(4), px(10))
-            setOnClickListener {
-                done(input.text.toString().trim())
-                dialog.dismiss()
-            }
-        })
-        box.addView(buttons)
-        dialog.window?.setBackgroundDrawable(rounded(dialogBg(), 16))
-        dialog.show()
+        appPrompt(title, value, ok, hint = "Playlist name", done = done)
     }
 
 internal fun MainActivity.deletePlaylist(index: Int) {
@@ -355,12 +314,13 @@ internal fun MainActivity.trackRow(index: Int, track: Track, songs: LinearLayout
             setPadding(px(8), px(8), px(4), px(8))
             setOnClickListener {
                 val at = songs.indexOfChild(row)
-                AlertDialog.Builder(this@trackRow)
-                    .setTitle("Remove this song?")
-                    .setMessage(track.title)
-                    .setPositiveButton("Remove") { _, _ -> removeTrack(at) }
-                    .setNegativeButton("Cancel", null)
-                    .show()
+                appConfirm(
+                    title = "Remove this song?",
+                    message = track.title,
+                    confirmLabel = "Remove",
+                    cancelLabel = "Cancel",
+                    onConfirm = { removeTrack(at) },
+                )
             }
         })
         row.addView(TextView(this).apply {
@@ -375,39 +335,13 @@ internal fun MainActivity.trackRow(index: Int, track: Track, songs: LinearLayout
     }
 
 internal fun MainActivity.showVolumeDialog(index: Int, track: Track, chip: TextView) {
-        val value = TextView(this).apply {
-            text = String.format("×%.1f", track.volume)
-            textSize = 16f
-            gravity = Gravity.CENTER
-            setPadding(0, px(6), 0, px(12))
-        }
-        val seek = SeekBar(this).apply {
-            max = 45 // 0.5 .. 5.0 in 0.1 steps
-            progress = ((track.volume.coerceIn(0.5f, 5f) - 0.5f) * 10f).toInt()
-            setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
-                override fun onProgressChanged(bar: SeekBar?, progress: Int, fromUser: Boolean) {
-                    val v = 0.5f + progress / 10f
-                    value.text = String.format("×%.1f", v)
-                    if (index == library.currentTrack && engine.ready) {
-                        engine.trackGain = v
-                        engine.applyVolume()
-                    }
-                }
-                override fun onStartTrackingTouch(bar: SeekBar?) {}
-                override fun onStopTrackingTouch(bar: SeekBar?) {}
-            })
-        }
-        val box = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            setPadding(px(24), px(4), px(24), 0)
-            addView(value)
-            addView(seek)
-        }
-        AlertDialog.Builder(this)
-            .setTitle("Track volume")
-            .setMessage("${track.title}\n\n0.5 = quieter · 1.0 = original · 5.0 = boost")
-            .setView(box)
-            .setPositiveButton("Save") { _, _ ->
+        lateinit var seek: SeekBar
+        appContentModal(
+            title = "Track volume",
+            message = "${track.title}\n0.5 quieter · 1.0 original · 5.0 boost",
+            confirmLabel = "Save",
+            cancelLabel = "Cancel",
+            onConfirm = {
                 val v = 0.5f + seek.progress / 10f
                 library.current().tracks.getOrNull(index)?.volume = v
                 library.save()
@@ -417,14 +351,40 @@ internal fun MainActivity.showVolumeDialog(index: Int, track: Track, chip: TextV
                     engine.trackGain = v
                     engine.applyVolume()
                 }
-            }
-            .setNegativeButton("Cancel") { _, _ ->
+            },
+            onCancel = {
                 if (index == library.currentTrack && engine.ready) {
                     engine.trackGain = library.current().tracks.getOrNull(index)?.volume ?: 1f
                     engine.applyVolume()
                 }
+            },
+        ) {
+            val value = TextView(this@showVolumeDialog).apply {
+                text = String.format("×%.1f", track.volume)
+                setTextColor(ink())
+                textSize = 16f
+                gravity = Gravity.CENTER
+                setPadding(0, px(6), 0, px(12))
             }
-            .show()
+            seek = SeekBar(this@showVolumeDialog).apply {
+                max = 45 // 0.5 .. 5.0 in 0.1 steps
+                progress = ((track.volume.coerceIn(0.5f, 5f) - 0.5f) * 10f).toInt()
+                setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+                    override fun onProgressChanged(bar: SeekBar?, progress: Int, fromUser: Boolean) {
+                        val v = 0.5f + progress / 10f
+                        value.text = String.format("×%.1f", v)
+                        if (index == library.currentTrack && engine.ready) {
+                            engine.trackGain = v
+                            engine.applyVolume()
+                        }
+                    }
+                    override fun onStartTrackingTouch(bar: SeekBar?) {}
+                    override fun onStopTrackingTouch(bar: SeekBar?) {}
+                })
+            }
+            addView(value)
+            addView(seek)
+        }
     }
 
 internal fun MainActivity.dragSong(songs: LinearLayout, scroller: ScrollView, row: View, selected: Int, event: MotionEvent): Boolean {

@@ -130,7 +130,8 @@ class MainActivity : Activity() {
     internal var noteKey = ""
     internal var askedNotes = false
     internal var noteDenied = false
-    internal var notesDialog: AlertDialog? = null
+    internal var notesDialog: View? = null
+    internal var appModal: View? = null
     internal var serviceUp = false
     internal var cover: Bitmap? = null
     internal val metaCache = HashMap<String, Meta>()

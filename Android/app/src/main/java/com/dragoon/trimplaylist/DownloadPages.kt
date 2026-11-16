@@ -219,32 +219,23 @@ internal fun MainActivity.cookiePicker(form: LinearLayout) {
     }
 
 internal fun MainActivity.createCookie() {
-        AlertDialog.Builder(this)
-            .setTitle("Create cookie file")
-            .setItems(arrayOf("Manual .txt", "Import .txt file")) { _, which ->
-                if (which == 0) {
-                    val name = field("File name")
-                    AlertDialog.Builder(this)
-                        .setTitle("Cookie file name")
-                        .setView(pad(name))
-                        .setPositiveButton("Edit") { _, _ ->
-                            val clean = name.text.toString().trim().ifBlank { "cookies" }.removeSuffix(".txt") + ".txt"
-                            editorFile = File(cookiesDir(), clean)
-                            if (!editorFile!!.exists()) editorFile!!.writeText("# Netscape HTTP Cookie File\n")
-                            cookieName = clean
-                            saveTrim()
-                            open(Page.EDITOR)
-                        }
-                        .setNegativeButton("Cancel", null)
-                        .show()
-                } else {
-                    startActivityForResult(Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
-                        addCategory(Intent.CATEGORY_OPENABLE)
-                        type = "text/plain"
-                    }, PICK_COOKIE)
+        appChoices("Create cookie file", arrayOf("Manual .txt", "Import .txt file")) { which ->
+            if (which == 0) {
+                appPrompt("Cookie file name", "cookies", "Edit", hint = "File name") { raw ->
+                    val clean = raw.ifBlank { "cookies" }.removeSuffix(".txt") + ".txt"
+                    editorFile = File(cookiesDir(), clean)
+                    if (!editorFile!!.exists()) editorFile!!.writeText("# Netscape HTTP Cookie File\n")
+                    cookieName = clean
+                    saveTrim()
+                    open(Page.EDITOR)
                 }
+            } else {
+                startActivityForResult(Intent(Intent.ACTION_OPEN_DOCUMENT).apply {
+                    addCategory(Intent.CATEGORY_OPENABLE)
+                    type = "text/plain"
+                }, PICK_COOKIE)
             }
-            .show()
+        }
     }
 
 internal fun MainActivity.editorPage(): View {
@@ -538,22 +529,23 @@ internal fun MainActivity.offerDownloadedTracks(saved: List<Pair<Track, String>>
         if (saved.isEmpty()) return
         val labels = saved.map { it.second }.toTypedArray()
         val checked = BooleanArray(saved.size) { true }
-        AlertDialog.Builder(this)
-            .setTitle("Add saved files to playlist?")
-            .setMultiChoiceItems(labels, checked) { _, which, on -> checked[which] = on }
-            .setPositiveButton("Add") { _, _ ->
-                saved.forEachIndexed { index, (local, _) ->
-                    if (!checked[index]) return@forEachIndexed
-                    // Replace matching Online rows so Play uses storage, not the stream.
-                    replaceOnlineWithLocal(local)
-                    ensureMeta(local)
-                }
-                library.save()
-                toast("Added from Download/TrimPlaylist/")
-                show()
+        appMultiChoice(
+            title = "Add saved files to playlist?",
+            labels = labels,
+            checked = checked,
+            confirmLabel = "Add",
+            cancelLabel = "Later",
+        ) { picked ->
+            saved.forEachIndexed { index, (local, _) ->
+                if (!picked[index]) return@forEachIndexed
+                // Replace matching Online rows so Play uses storage, not the stream.
+                replaceOnlineWithLocal(local)
+                ensureMeta(local)
             }
-            .setNegativeButton("Later", null)
-            .show()
+            library.save()
+            toast("Added from Download/TrimPlaylist/")
+            show()
+        }
     }
 
 internal fun MainActivity.authCookieHeader(host: String): String? {
