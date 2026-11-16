@@ -219,12 +219,19 @@ class MainActivity : Activity() {
         applyBars()
         show()
         ticker.post(tick)
-        val filter = IntentFilter(DownloadManager.ACTION_DOWNLOAD_COMPLETE)
-        if (Build.VERSION.SDK_INT >= 33) registerReceiver(updateReceiver, filter, RECEIVER_NOT_EXPORTED)
-        else registerReceiver(updateReceiver, filter)
         if (notesOn) ensureNotePermission()
         // Check on launch so updates are offered without opening Settings.
         shell.post { checkForUpdate(prompt = true) }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        // Resume in-app install after the user allows installs from this app.
+        val pending = pendingUpdateApk
+        if (pending.isNotBlank() && packageManager.canRequestPackageInstalls()) {
+            pendingUpdateApk = ""
+            installUpdateApk(File(pending))
+        }
     }
 
     override fun onStop() {
@@ -244,7 +251,6 @@ class MainActivity : Activity() {
     }
 
     override fun onDestroy() {
-        unregisterReceiver(updateReceiver)
         ticker.removeCallbacks(tick)
         PlaybackBridge.onAction = null
         noteKey = ""
@@ -254,28 +260,13 @@ class MainActivity : Activity() {
         super.onDestroy()
     }
 
-    internal var updateDownloadId = -1L
+    internal var updateBusy = false
+    internal var pendingUpdateApk = ""
     internal var updateChecking = false
     internal var updatePrompted = false
     internal var latestLine = ""
     internal var latestApk = ""
     internal var latestVersion = ""
-
-    internal val updateReceiver = object : BroadcastReceiver() {
-        override fun onReceive(context: Context, intent: Intent) {
-            val id = intent.getLongExtra(DownloadManager.EXTRA_DOWNLOAD_ID, -1)
-            if (id != updateDownloadId) return
-            if (Build.VERSION.SDK_INT >= 26 && !packageManager.canRequestPackageInstalls()) {
-                startActivity(Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:$packageName")))
-                return
-            }
-            val uri = getSystemService(DownloadManager::class.java).getUriForDownloadedFile(id) ?: return
-            startActivity(Intent(Intent.ACTION_VIEW).apply {
-                setDataAndType(uri, "application/vnd.android.package-archive")
-                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
-            })
-        }
-    }
 
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)

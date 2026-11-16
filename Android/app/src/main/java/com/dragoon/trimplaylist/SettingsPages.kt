@@ -119,13 +119,108 @@ internal fun MainActivity.offerUpdatePopup(version: String, apk: String) {
             .show()
     }
 
+/** In-app update: download the APK inside the app, then hand it to PackageInstaller. */
 internal fun MainActivity.downloadUpdate(url: String) {
-        val request = DownloadManager.Request(Uri.parse(url))
-            .setMimeType("application/vnd.android.package-archive")
-            .setTitle("Trim Playlist update")
-            .setNotificationVisibility(DownloadManager.Request.VISIBILITY_VISIBLE_NOTIFY_COMPLETED)
-            .setDestinationInExternalFilesDir(this, Environment.DIRECTORY_DOWNLOADS, "TrimPlaylist-update.apk")
-        updateDownloadId = getSystemService(DownloadManager::class.java).enqueue(request)
+        if (updateBusy) {
+            toast("Update already in progress")
+            return
+        }
+        if (url.isBlank() || !url.startsWith("https://")) {
+            toast("Update link unavailable")
+            return
+        }
+        // Only accept the project's own hosted APK / GitHub release assets.
+        val host = Uri.parse(url).host.orEmpty().lowercase()
+        if (host != "dragoont.github.io" && host != "github.com" && !host.endsWith(".githubusercontent.com")) {
+            toast("Update link not trusted")
+            return
+        }
+        updateBusy = true
+        downloadCleared = false
+        reportDownload("Downloading update · 0%", 0f)
+        toast("Downloading update…")
+        thread {
+            val out = File(cacheDir, "TrimPlaylist-update.apk")
+            try {
+                val connection = URL(url).openConnection().apply {
+                    connectTimeout = 20000
+                    readTimeout = 60000
+                }
+                val total = connection.contentLengthLong
+                connection.getInputStream().use { input ->
+                    out.outputStream().use { output ->
+                        val buffer = ByteArray(64 * 1024)
+                        var read = 0L
+                        while (true) {
+                            val n = input.read(buffer)
+                            if (n <= 0) break
+                            output.write(buffer, 0, n)
+                            read += n
+                            val fraction = if (total > 0) (read.toFloat() / total.toFloat()) else 0.15f
+                            reportDownload("Downloading update · ${(fraction * 100).toInt().coerceIn(0, 99)}%", fraction.coerceIn(0f, 0.99f))
+                        }
+                        output.flush()
+                    }
+                }
+                if (!out.exists() || out.length() < 1024L) throw IllegalStateException("Update file incomplete")
+                reportDownload("Installing update…", 1f)
+                runOnUiThread { installUpdateApk(out) }
+            } catch (error: Exception) {
+                out.delete()
+                updateBusy = false
+                reportDownload(error.message ?: "Update download failed", 0f)
+                runOnUiThread { toast(error.message ?: "Update download failed") }
+            }
+        }
+    }
+
+internal fun MainActivity.installUpdateApk(apk: File) {
+        if (!apk.exists()) {
+            updateBusy = false
+            toast("Update file missing")
+            return
+        }
+        if (!packageManager.canRequestPackageInstalls()) {
+            pendingUpdateApk = apk.absolutePath
+            updateBusy = false
+            reportDownload("Allow installs, then return", 1f)
+            toast("Allow installs from Trim Playlist, then return")
+            startActivity(Intent(Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:$packageName")))
+            return
+        }
+        try {
+            val installer = packageManager.packageInstaller
+            val params = android.content.pm.PackageInstaller.SessionParams(
+                android.content.pm.PackageInstaller.SessionParams.MODE_FULL_INSTALL,
+            ).apply {
+                setAppPackageName(packageName)
+                if (Build.VERSION.SDK_INT >= 31) {
+                    setRequireUserAction(android.content.pm.PackageInstaller.SessionParams.USER_ACTION_NOT_REQUIRED)
+                }
+            }
+            val sessionId = installer.createSession(params)
+            installer.openSession(sessionId).use { session ->
+                apk.inputStream().use { input ->
+                    session.openWrite("update.apk", 0, apk.length()).use { output ->
+                        input.copyTo(output)
+                        session.fsync(output)
+                    }
+                }
+                val callback = Intent(this, UpdateInstallReceiver::class.java)
+                val flags = PendingIntent.FLAG_UPDATE_CURRENT or
+                    if (Build.VERSION.SDK_INT >= 31) PendingIntent.FLAG_MUTABLE else 0
+                val pending = PendingIntent.getBroadcast(this, sessionId, callback, flags)
+                session.commit(pending.intentSender)
+            }
+            reportDownload("Confirm install…", 1f)
+            toast("Confirm the install prompt")
+        } catch (error: Exception) {
+            toast(error.message ?: "Couldn't start install")
+            reportDownload(error.message ?: "Couldn't start install", 0f)
+        } finally {
+            updateBusy = false
+            placeDownload()
+        }
     }
 
 internal fun MainActivity.settingsPage(): View {

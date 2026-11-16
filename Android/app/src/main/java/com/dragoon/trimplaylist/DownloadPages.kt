@@ -427,7 +427,7 @@ internal fun MainActivity.reportDownload(text: String, fraction: Float) {
     }
 
 internal fun MainActivity.placeDownload() {
-        val showBar = !downloadCleared && history.lastOrNull() == Page.URL && downloadLabel.text.isNotBlank()
+        val showBar = updateBusy || (!downloadCleared && history.lastOrNull() == Page.URL && downloadLabel.text.isNotBlank())
         downloadStrip.visibility = if (showBar) View.VISIBLE else View.GONE
     }
 
