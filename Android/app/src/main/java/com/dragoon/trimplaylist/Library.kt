@@ -37,7 +37,7 @@ class Library(context: Context) {
 
     fun current(): Playlist = playlists[selected.coerceIn(playlists.indices)]
 
-    fun save() {
+    fun save(sync: Boolean = false) {
         val list = JSONArray()
         playlists.forEach { playlist ->
             val tracks = JSONArray()
@@ -64,7 +64,9 @@ class Library(context: Context) {
             .put("shuffle", shuffle)
             .put("volume", volume.toDouble())
             .put("playlists", list)
-        prefs.edit().putString(KEY, root.toString()).apply()
+        val edit = prefs.edit().putString(KEY, root.toString())
+        // Sync commit on pause/stop so force-close still keeps 3:20 instead of resetting to 0:00.
+        if (sync) edit.commit() else edit.apply()
     }
 
     private fun load() {

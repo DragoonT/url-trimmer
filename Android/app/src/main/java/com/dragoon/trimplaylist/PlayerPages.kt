@@ -253,7 +253,8 @@ internal fun MainActivity.refreshClock() {
         miniPlay?.invalidate()
         val track = library.current().tracks.getOrNull(library.currentTrack)
         if (track != null) playerArtist?.text = trackLine(track)
-        if (playing) library.positionMs = position
+        // Keep playhead in memory while ready (playing or paused) so close/reopen can restore it.
+        if (engine.ready) library.positionMs = position
         syncSession(false)
     }
 
@@ -269,7 +270,17 @@ internal fun MainActivity.isLocalTrack(track: Track): Boolean {
             (uri.startsWith("/") && !uri.startsWith("//"))
     }
 
-internal fun MainActivity.play(index: Int, seekMs: Int) {
+/** Restore last track + time after app reopen (paused), matching PC resume behavior. */
+internal fun MainActivity.restorePlaybackSession() {
+        if (sessionRestored) return
+        sessionRestored = true
+        val index = library.currentTrack
+        if (index !in library.current().tracks.indices) return
+        val seek = library.positionMs.coerceAtLeast(0)
+        play(index, seek, autoplay = false)
+    }
+
+internal fun MainActivity.play(index: Int, seekMs: Int, autoplay: Boolean = true) {
         warnNotesOff()
         val track = library.current().tracks.getOrNull(index) ?: return
         if (track.uri.isBlank()) {
@@ -283,7 +294,7 @@ internal fun MainActivity.play(index: Int, seekMs: Int) {
             streamHeaders = emptyMap()
             streamPageUri = ""
             streamAudioOnly = false
-            beginPlay(index, Uri.parse(track.uri), track.video, seekMs, online = false)
+            beginPlay(index, Uri.parse(track.uri), track.video, seekMs, online = false, autoplay = autoplay)
             return
         }
         if (track.kind == "online" && (track.uri.contains("youtube.com") || track.uri.contains("youtu.be"))) {
@@ -291,7 +302,7 @@ internal fun MainActivity.play(index: Int, seekMs: Int) {
             streamBusy = true
             streamPageUri = track.uri
             streamAudioOnly = !track.video
-            toast("Opening stream…")
+            if (autoplay) toast("Opening stream…")
             val audio = !track.video
             val cookie = authCookieHeader("www.youtube.com")
             Thread {
@@ -301,7 +312,7 @@ internal fun MainActivity.play(index: Int, seekMs: Int) {
                         if (gen != streamGen) return@runOnUiThread
                         streamBusy = false
                         streamHeaders = buildStreamHeaders(cookie)
-                        beginPlay(index, Uri.parse(stream), track.video, seekMs, online = true)
+                        beginPlay(index, Uri.parse(stream), track.video, seekMs, online = true, autoplay = autoplay)
                     }
                 } catch (error: Exception) {
                     runOnUiThread {
@@ -320,7 +331,7 @@ internal fun MainActivity.play(index: Int, seekMs: Int) {
         streamHeaders = emptyMap()
         streamPageUri = ""
         streamAudioOnly = false
-        beginPlay(index, Uri.parse(track.uri), track.video, seekMs, online = false)
+        beginPlay(index, Uri.parse(track.uri), track.video, seekMs, online = false, autoplay = autoplay)
     }
 
 internal fun MainActivity.buildStreamHeaders(cookie: String?): Map<String, String> {
@@ -332,19 +343,26 @@ internal fun MainActivity.buildStreamHeaders(cookie: String?): Map<String, Strin
         return headers
     }
 
-internal fun MainActivity.beginPlay(index: Int, uri: Uri, video: Boolean, seekMs: Int, online: Boolean = false) {
+internal fun MainActivity.beginPlay(
+        index: Int,
+        uri: Uri,
+        video: Boolean,
+        seekMs: Int,
+        online: Boolean = false,
+        autoplay: Boolean = true,
+    ) {
         val previous = library.current().tracks.getOrNull(library.currentTrack)
         library.currentTrack = index
         val track = library.current().tracks.getOrNull(index)
         val gain = track?.volume ?: 1f
-        library.positionMs = seekMs
-        library.save()
+        library.positionMs = seekMs.coerceAtLeast(0)
+        library.save(sync = !autoplay)
         if (!video) releasePersistentVideo(force = true)
         val onPlayer = history.lastOrNull() == Page.PLAYER
         if (video && engine.surface == null && videoTexture?.isAvailable != true) {
-            engine.queue(uri, seekMs, gain, online)
+            engine.queue(uri, seekMs, gain, online, autoplay)
         } else {
-            engine.play(uri, video, seekMs, gain, online)
+            engine.play(uri, video, seekMs, gain, online, autoplay)
         }
         if (!onPlayer) {
             open(Page.PLAYER)

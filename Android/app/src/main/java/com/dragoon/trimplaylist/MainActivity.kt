@@ -226,6 +226,8 @@ class MainActivity : Activity() {
         show()
         ticker.post(tick)
         if (notesOn) ensureNotePermission()
+        // Like PC: reopen at the saved track + time (paused).
+        shell.post { restorePlaybackSession() }
     }
 
     override fun onStart() {
@@ -245,11 +247,22 @@ class MainActivity : Activity() {
         }
     }
 
+    override fun onPause() {
+        persistPlaybackPosition()
+        super.onPause()
+    }
+
     override fun onStop() {
         appInForeground = false
-        library.positionMs = engine.position()
-        library.save()
+        persistPlaybackPosition()
         super.onStop()
+    }
+
+    /** Flush playhead so closing the app at 3:20 restores 3:20 next launch. */
+    internal fun persistPlaybackPosition() {
+        if (library.currentTrack < 0 && !engine.ready) return
+        if (engine.ready) library.positionMs = engine.position().coerceAtLeast(0)
+        library.save(sync = true)
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -278,6 +291,7 @@ class MainActivity : Activity() {
     internal var updateChecking = false
     internal var appInForeground = false
     internal var lastUpdateCheckMs = 0L
+    internal var sessionRestored = false
     internal var updateOverlay: View? = null
     internal var latestLine = ""
     internal var latestApk = ""
@@ -450,7 +464,7 @@ class MainActivity : Activity() {
             if (ready && queued == null) return
             queued?.let { (uri, seek) ->
                 queued = null
-                play(uri, true, seek, queuedGain, queuedOnline)
+                play(uri, true, seek, queuedGain, queuedOnline, queuedAutoplay)
             }
         }
 
@@ -460,14 +474,16 @@ class MainActivity : Activity() {
         }
 
         private var queuedOnline = false
-        fun queue(uri: Uri, seekMs: Int, gain: Float, online: Boolean = false) {
+        private var queuedAutoplay = true
+        fun queue(uri: Uri, seekMs: Int, gain: Float, online: Boolean = false, autoplay: Boolean = true) {
             queued = uri to seekMs
             queuedGain = gain
             queuedOnline = online
+            queuedAutoplay = autoplay
             videoMode = true
         }
 
-        fun play(uri: Uri, video: Boolean, seekMs: Int, gain: Float = trackGain, online: Boolean = false) {
+        fun play(uri: Uri, video: Boolean, seekMs: Int, gain: Float = trackGain, online: Boolean = false, autoplay: Boolean = true) {
             trackGain = gain.coerceIn(0.5f, 5f)
             val current = ++token
             ready = false
@@ -503,7 +519,7 @@ class MainActivity : Activity() {
                     if (videoMode) try { player.setSurface(surface) } catch (_: IllegalStateException) {}
                     applyVolume()
                     if (seekMs > 0) it.seekTo(seekMs)
-                    it.start()
+                    if (autoplay) it.start()
                     onChange?.invoke()
                 }
                 player.setOnCompletionListener { if (current == token) onTrackEnded() }
