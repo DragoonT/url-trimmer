@@ -82,6 +82,8 @@ class MainActivity : Activity() {
     internal val onlinePicked = mutableSetOf<Int>()
     internal var streamBusy = false
     internal var streamGen = 0
+    /** True while advancing/loading the next track so shade Play cannot restart the finished one. */
+    internal var trackSwitching = false
     internal var catalogBusy = false
     internal var streamHeaders: Map<String, String> = emptyMap()
     internal var streamPageUri = ""
@@ -512,6 +514,7 @@ class MainActivity : Activity() {
                 player.setOnPreparedListener {
                     if (current != token) return@setOnPreparedListener
                     ready = true
+                    trackSwitching = false
                     streamRetries = 0
                     if (videoMode) try { player.setSurface(surface) } catch (_: IllegalStateException) {}
                     applyVolume()
@@ -519,11 +522,20 @@ class MainActivity : Activity() {
                     if (autoplay) it.start()
                     onChange?.invoke()
                 }
-                player.setOnCompletionListener { if (current == token) onTrackEnded() }
+                player.setOnCompletionListener {
+                    if (current != token) return@setOnCompletionListener
+                    // PlaybackCompleted still reports ready; clear it so shade Play cannot
+                    // restart this finished track while we advance to the next one.
+                    ready = false
+                    trackSwitching = true
+                    onChange?.invoke()
+                    onTrackEnded()
+                }
                 player.setOnErrorListener { _, _, _ ->
                     if (current != token) return@setOnErrorListener true
                     val position = try { player.currentPosition } catch (_: IllegalStateException) { seekMs }
                     ready = false
+                    trackSwitching = false
                     // Offline / saved files must never fall back into the Online reconnect path.
                     val currentTrack = library.current().tracks.getOrNull(library.currentTrack)
                     if (currentTrack != null && isLocalTrack(currentTrack)) {
@@ -531,21 +543,26 @@ class MainActivity : Activity() {
                         streamPageUri = ""
                         streamHeaders = emptyMap()
                         toast("Couldn't play that track")
+                        onChange?.invoke()
                         return@setOnErrorListener true
                     }
                     if (onlineUri && streamPageUri.isNotBlank() && streamRetries < 4) {
                         streamRetries += 1
+                        trackSwitching = true
                         toast("Reconnecting stream…")
                         retryOnlineStream(position)
                         return@setOnErrorListener true
                     }
                     toast("Couldn't play that track")
+                    onChange?.invoke()
                     true
                 }
                 player.prepareAsync()
             } catch (_: Exception) {
                 ready = false
+                trackSwitching = false
                 toast("Couldn't open that track")
+                onChange?.invoke()
             }
         }
 

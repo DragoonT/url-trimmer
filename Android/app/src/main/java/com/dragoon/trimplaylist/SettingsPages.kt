@@ -321,7 +321,8 @@ internal fun MainActivity.aboutPage(): View {
 
 internal fun MainActivity.syncSession(force: Boolean) {
         val track = library.current().tracks.getOrNull(library.currentTrack)
-        if (track == null || (!engine.ready && !engine.playing())) {
+        val bridging = trackSwitching || streamBusy
+        if (track == null || (!engine.ready && !engine.playing() && !bridging)) {
             if (noteKey.isNotEmpty() || serviceUp) {
                 noteKey = ""
                 serviceUp = false
@@ -331,6 +332,7 @@ internal fun MainActivity.syncSession(force: Boolean) {
             return
         }
         val playing = engine.playing()
+        val buffering = bridging && !playing
         val line = formatMeta(track, metaCache[track.uri])
         val artist = line.substringBefore(" · ")
         val duration = engine.duration().toLong().takeIf { it > 0 } ?: (metaCache[track.uri]?.durationMs?.toLong() ?: 0L)
@@ -343,20 +345,26 @@ internal fun MainActivity.syncSession(force: Boolean) {
                 .putBitmap(MediaMetadata.METADATA_KEY_ALBUM_ART, coverArt())
                 .build()
         )
+        val state = when {
+            playing -> PlaybackState.STATE_PLAYING
+            buffering -> PlaybackState.STATE_BUFFERING
+            else -> PlaybackState.STATE_PAUSED
+        }
         session.setPlaybackState(
             PlaybackState.Builder()
                 .setActions(
                     PlaybackState.ACTION_PLAY or PlaybackState.ACTION_PAUSE or PlaybackState.ACTION_PLAY_PAUSE or
                         PlaybackState.ACTION_SKIP_TO_NEXT or PlaybackState.ACTION_SKIP_TO_PREVIOUS or PlaybackState.ACTION_SEEK_TO
                 )
-                .setState(if (playing) PlaybackState.STATE_PLAYING else PlaybackState.STATE_PAUSED, engine.position().toLong(), if (playing) 1f else 0f)
+                .setState(state, engine.position().toLong(), if (playing) 1f else 0f)
                 .build()
         )
         session.isActive = true
-        val key = "${track.uri}|$playing|$line"
+        val key = "${track.uri}|$playing|$buffering|$line"
         if (!force && key == noteKey) return
         noteKey = key
-        pushNotification(track.title, line, playing)
+        // Keep the foreground service alive across track gaps so Android does not kill audio.
+        pushNotification(track.title, line, playing || buffering)
     }
 
 internal fun MainActivity.notesBlocked(): Boolean {

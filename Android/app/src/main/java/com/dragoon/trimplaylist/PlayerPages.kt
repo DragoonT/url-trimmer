@@ -287,6 +287,12 @@ internal fun MainActivity.play(index: Int, seekMs: Int, autoplay: Boolean = true
             toast("Choose this file again")
             return
         }
+        // Point library + shade at the intended track immediately so notification Play
+        // cannot revive the song that just finished while the next one is still loading.
+        trackSwitching = true
+        library.currentTrack = index
+        library.positionMs = seekMs.coerceAtLeast(0)
+        if (engine.ready && !engine.playing()) engine.ready = false
         // Local / saved downloads must never go through the online stream path.
         if (isLocalTrack(track)) {
             streamGen += 1
@@ -302,6 +308,8 @@ internal fun MainActivity.play(index: Int, seekMs: Int, autoplay: Boolean = true
             streamBusy = true
             streamPageUri = track.uri
             streamAudioOnly = !track.video
+            library.save()
+            refreshChrome()
             if (autoplay) toast("Opening stream…")
             val audio = !track.video
             val cookie = authCookieHeader("www.youtube.com")
@@ -318,9 +326,11 @@ internal fun MainActivity.play(index: Int, seekMs: Int, autoplay: Boolean = true
                     runOnUiThread {
                         if (gen != streamGen) return@runOnUiThread
                         streamBusy = false
+                        trackSwitching = false
                         streamHeaders = emptyMap()
                         streamPageUri = ""
                         toast(error.message ?: "Couldn't open that stream")
+                        refreshChrome()
                     }
                 }
             }.start()
@@ -352,6 +362,7 @@ internal fun MainActivity.beginPlay(
         autoplay: Boolean = true,
     ) {
         val previous = library.current().tracks.getOrNull(library.currentTrack)
+        trackSwitching = true
         library.currentTrack = index
         val track = library.current().tracks.getOrNull(index)
         val gain = track?.volume ?: 1f
@@ -365,7 +376,9 @@ internal fun MainActivity.beginPlay(
             engine.play(uri, video, seekMs, gain, online, autoplay)
         }
         if (!onPlayer) {
-            open(Page.PLAYER)
+            // Advancing in the background must not force a Player rebuild — that used to
+            // desync shade controls until the user re-entered the app.
+            if (hasWindowFocus()) open(Page.PLAYER) else refreshChrome()
             return
         }
         // Only rebuild when audio <-> video layout must change; otherwise keep the page (and surface).
@@ -387,6 +400,8 @@ internal fun MainActivity.retryOnlineStream(fromMs: Int) {
         if (index < 0) return
         val gen = ++streamGen
         streamBusy = true
+        trackSwitching = true
+        refreshChrome()
         val audio = streamAudioOnly
         val cookie = authCookieHeader("www.youtube.com")
         Thread {
@@ -397,20 +412,31 @@ internal fun MainActivity.retryOnlineStream(fromMs: Int) {
                     streamBusy = false
                     streamHeaders = buildStreamHeaders(cookie)
                     val track = library.current().tracks.getOrNull(index) ?: return@runOnUiThread
-                    if (isLocalTrack(track)) return@runOnUiThread
+                    if (isLocalTrack(track)) {
+                        trackSwitching = false
+                        return@runOnUiThread
+                    }
                     beginPlay(index, Uri.parse(stream), track.video, fromMs.coerceAtLeast(0), online = true)
                 }
             } catch (error: Exception) {
                 runOnUiThread {
                     if (gen != streamGen) return@runOnUiThread
                     streamBusy = false
+                    trackSwitching = false
                     toast(error.message ?: "Couldn't open that stream")
+                    refreshChrome()
                 }
             }
         }.start()
     }
 
 internal fun MainActivity.togglePlay() {
+        // While the next track is loading, ignore shade/lock-screen Play so we do not
+        // restart the track that just ended.
+        if (trackSwitching || streamBusy) {
+            refreshChrome()
+            return
+        }
         if (engine.ready) {
             engine.toggle()
             refreshChrome()
@@ -449,6 +475,7 @@ internal fun MainActivity.onTrackEnded() {
             val last = library.currentTrack >= library.current().tracks.lastIndex && !library.shuffle
             if (last && library.repeatMode == 0) {
                 engine.ready = false
+                trackSwitching = false
                 library.positionMs = 0
                 refreshChrome()
             } else step(1)
