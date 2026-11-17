@@ -540,7 +540,15 @@ internal fun MainActivity.offerDownloadedTracks(saved: List<Pair<Track, String>>
                 if (!picked[index]) return@forEachIndexed
                 // Replace matching Online rows so Play uses storage, not the stream.
                 replaceOnlineWithLocal(local)
-                ensureMeta(local)
+                // Skip heavy meta while this file is playing — retriever stops MediaPlayer.
+                if (!isActivelyPlayingUri(local.uri)) ensureMeta(local)
+                else {
+                    metaCache[local.uri] = Meta(
+                        local.artist.ifBlank { guessArtist(local.title) },
+                        local.durationMs,
+                        local.thumb,
+                    )
+                }
             }
             library.save()
             toast("Added from Download/TrimPlaylist/")

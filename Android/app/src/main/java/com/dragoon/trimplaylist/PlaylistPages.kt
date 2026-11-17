@@ -193,7 +193,14 @@ internal fun MainActivity.addDownload() {
                 val title = name.substringBeforeLast('.')
                 val local = Track(title, uri.toString(), "file", Library.looksLikeVideo(name))
                 replaceOnlineWithLocal(local)
-                ensureMeta(local)
+                if (!isActivelyPlayingUri(local.uri)) ensureMeta(local)
+                else {
+                    metaCache[local.uri] = Meta(
+                        local.artist.ifBlank { guessArtist(local.title) },
+                        local.durationMs,
+                        local.thumb,
+                    )
+                }
             }
             library.save()
             toast("Using files from Download/TrimPlaylist/")

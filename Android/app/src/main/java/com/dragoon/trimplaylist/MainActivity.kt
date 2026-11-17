@@ -337,21 +337,18 @@ class MainActivity : Activity() {
         if (requestCode == PICK_COOKIE) importCookie(data.data)
     }
 
-    /** Redraw playlist UI without tearing down an active Player surface / playhead. */
+    /** Redraw playlist UI without tearing down active playback (Add download used to stop music). */
     internal fun refreshAfterPlaylistChange() {
-        when (history.lastOrNull()) {
-            Page.PLAYER -> {
-                if (engine.ready) {
-                    val track = library.current().tracks.getOrNull(library.currentTrack)
-                    playerTitle?.text = track?.title ?: "Select a track"
-                    playerArtist?.text = track?.let { trackLine(it) } ?: " "
-                    refreshChrome()
-                } else {
-                    show()
-                }
+        if (engine.ready || engine.playing()) {
+            val track = library.current().tracks.getOrNull(library.currentTrack)
+            if (history.lastOrNull() == Page.PLAYER) {
+                playerTitle?.text = track?.title ?: "Select a track"
+                playerArtist?.text = track?.let { trackLine(it) } ?: " "
             }
-            else -> show()
+            refreshChrome()
+            return
         }
+        show()
     }
 
     internal fun show() {

@@ -559,6 +559,10 @@ internal fun MainActivity.formatMeta(track: Track, known: Meta?): String {
 
 internal fun MainActivity.sameTrack(track: Track) = library.current().tracks.getOrNull(library.currentTrack)?.uri == track.uri
 
+/** True when MediaPlayer is using this URI — opening MediaMetadataRetriever on it can kill playback. */
+internal fun MainActivity.isActivelyPlayingUri(uri: String): Boolean =
+        uri.isNotBlank() && engine.ready && library.current().tracks.getOrNull(library.currentTrack)?.uri == uri
+
 internal fun MainActivity.guessArtist(title: String): String {
         val name = title.substringBeforeLast('.')
         val parts = name.split(" - ").map { it.trim() }.filter { it.isNotEmpty() }
@@ -578,6 +582,26 @@ internal fun MainActivity.ensureMeta(track: Track) {
         val cached = metaCache[track.uri]
         if (cached != null && artCache.containsKey(track.uri)) return
         if (cached != null && track.thumb.isBlank() && cached.thumbUrl.isBlank() && track.kind != "online" && !track.uri.startsWith("content:") && !track.uri.startsWith("file:")) return
+        // While this file is playing, only fill cache from known fields — never open a retriever on it.
+        if (isActivelyPlayingUri(track.uri)) {
+            if (cached == null) {
+                metaCache[track.uri] = Meta(
+                    track.artist.ifBlank { guessArtist(track.title) },
+                    track.durationMs,
+                    track.thumb,
+                )
+            }
+            if (!artCache.containsKey(track.uri) && track.thumb.isNotBlank()) {
+                thread(name = "track-art") {
+                    val art = decodeArt(track.thumb)
+                    if (art != null) runOnUiThread {
+                        artCache[track.uri] = art
+                        artViews.filter { it.first == track.uri && it.second.isAttachedToWindow }.forEach { it.second.art = art }
+                    }
+                }
+            }
+            return
+        }
         metaLoading.add(track.uri)
         thread(name = "track-meta") {
             try {
@@ -661,6 +685,10 @@ internal fun MainActivity.readMeta(track: Track): Meta {
             } catch (_: Exception) {
                 Meta(guess, track.durationMs, track.thumb)
             }
+        }
+        // Retriever + MediaPlayer on the same local URI stops playback on many phones.
+        if (isActivelyPlayingUri(track.uri)) {
+            return Meta(guess, track.durationMs, track.thumb)
         }
         return try {
             val retriever = MediaMetadataRetriever()

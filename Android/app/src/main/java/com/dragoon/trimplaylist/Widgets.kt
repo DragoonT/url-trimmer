@@ -346,6 +346,8 @@ internal fun MainActivity.replaceOnlineWithLocal(local: Track) {
         }
         var resumeIndex = -1
         var resumeMs = 0
+        var orphanedResumeMs = -1
+        val wasPlaying = engine.playing()
         val touchesCurrent = matches.any { it == library.currentTrack }
         // Only cancel the live stream when the playing Online row is the one being replaced.
         if (touchesCurrent) {
@@ -360,22 +362,28 @@ internal fun MainActivity.replaceOnlineWithLocal(local: Track) {
                 if (local.durationMs <= 0) local.durationMs = previous.durationMs
                 if (local.thumb.isBlank() && previous.thumb.isNotBlank()) local.thumb = previous.thumb
                 tracks[index] = local
-                if (library.currentTrack == index) {
-                    resumeIndex = index
-                    resumeMs = engine.position().coerceAtLeast(0)
+                when {
+                    library.currentTrack == index -> {
+                        resumeIndex = index
+                        resumeMs = engine.position().coerceAtLeast(0)
+                    }
+                    orphanedResumeMs >= 0 -> {
+                        resumeIndex = index
+                        resumeMs = orphanedResumeMs
+                    }
                 }
             } else {
                 tracks.removeAt(index)
                 if (library.currentTrack == index) {
-                    engine.stop()
+                    orphanedResumeMs = engine.position().coerceAtLeast(0)
                     library.currentTrack = -1
                 } else if (library.currentTrack > index) {
                     library.currentTrack -= 1
                 }
             }
         }
-        // Switch playback to the saved file only when that Online row was actually playing.
-        if (resumeIndex >= 0) play(resumeIndex, resumeMs)
+        // Switch to the saved file only if that Online row was playing — keep autoplay state.
+        if (resumeIndex >= 0) play(resumeIndex, resumeMs, autoplay = wasPlaying || !engine.ready)
     }
 
 internal fun MainActivity.displayName(uri: Uri): String {
