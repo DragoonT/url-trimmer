@@ -332,7 +332,9 @@ internal fun MainActivity.syncSession(force: Boolean) {
             return
         }
         val playing = engine.playing()
-        val buffering = bridging && !playing
+        // Only show system "loading" while scraping a stream — not for the whole switch,
+        // or shade stays on an infinite spinner when prepare is slow / video has no surface yet.
+        val buffering = streamBusy && !playing
         val line = formatMeta(track, metaCache[track.uri])
         val artist = line.substringBefore(" · ")
         val duration = engine.duration().toLong().takeIf { it > 0 } ?: (metaCache[track.uri]?.durationMs?.toLong() ?: 0L)
@@ -360,11 +362,11 @@ internal fun MainActivity.syncSession(force: Boolean) {
                 .build()
         )
         session.isActive = true
-        val key = "${track.uri}|$playing|$buffering|$line"
+        val key = "${track.uri}|$playing|$buffering|$bridging|$line"
         if (!force && key == noteKey) return
         noteKey = key
         // Keep the foreground service alive across track gaps so Android does not kill audio.
-        pushNotification(track.title, line, playing || buffering)
+        pushNotification(track.title, line, playing || bridging)
     }
 
 internal fun MainActivity.notesBlocked(): Boolean {

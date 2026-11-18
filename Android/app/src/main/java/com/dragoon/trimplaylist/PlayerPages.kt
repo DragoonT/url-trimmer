@@ -284,11 +284,14 @@ internal fun MainActivity.play(index: Int, seekMs: Int, autoplay: Boolean = true
         warnNotesOff()
         val track = library.current().tracks.getOrNull(index) ?: return
         if (track.uri.isBlank()) {
+            trackSwitching = false
             toast("Choose this file again")
+            refreshChrome()
             return
         }
         // Point library + shade at the intended track immediately so notification Play
         // cannot revive the song that just finished while the next one is still loading.
+        val previousVideo = library.current().tracks.getOrNull(library.currentTrack)?.video
         trackSwitching = true
         library.currentTrack = index
         library.positionMs = seekMs.coerceAtLeast(0)
@@ -300,7 +303,7 @@ internal fun MainActivity.play(index: Int, seekMs: Int, autoplay: Boolean = true
             streamHeaders = emptyMap()
             streamPageUri = ""
             streamAudioOnly = false
-            beginPlay(index, Uri.parse(track.uri), track.video, seekMs, online = false, autoplay = autoplay)
+            beginPlay(index, Uri.parse(track.uri), track.video, seekMs, online = false, autoplay = autoplay, previousVideo = previousVideo)
             return
         }
         if (track.kind == "online" && (track.uri.contains("youtube.com") || track.uri.contains("youtu.be"))) {
@@ -320,7 +323,7 @@ internal fun MainActivity.play(index: Int, seekMs: Int, autoplay: Boolean = true
                         if (gen != streamGen) return@runOnUiThread
                         streamBusy = false
                         streamHeaders = buildStreamHeaders(cookie)
-                        beginPlay(index, Uri.parse(stream), track.video, seekMs, online = true, autoplay = autoplay)
+                        beginPlay(index, Uri.parse(stream), track.video, seekMs, online = true, autoplay = autoplay, previousVideo = previousVideo)
                     }
                 } catch (error: Exception) {
                     runOnUiThread {
@@ -341,7 +344,7 @@ internal fun MainActivity.play(index: Int, seekMs: Int, autoplay: Boolean = true
         streamHeaders = emptyMap()
         streamPageUri = ""
         streamAudioOnly = false
-        beginPlay(index, Uri.parse(track.uri), track.video, seekMs, online = false, autoplay = autoplay)
+        beginPlay(index, Uri.parse(track.uri), track.video, seekMs, online = false, autoplay = autoplay, previousVideo = previousVideo)
     }
 
 internal fun MainActivity.buildStreamHeaders(cookie: String?): Map<String, String> {
@@ -360,8 +363,8 @@ internal fun MainActivity.beginPlay(
         seekMs: Int,
         online: Boolean = false,
         autoplay: Boolean = true,
+        previousVideo: Boolean? = null,
     ) {
-        val previous = library.current().tracks.getOrNull(library.currentTrack)
         trackSwitching = true
         library.currentTrack = index
         val track = library.current().tracks.getOrNull(index)
@@ -370,19 +373,15 @@ internal fun MainActivity.beginPlay(
         library.save(sync = !autoplay)
         if (!video) releasePersistentVideo(force = true)
         val onPlayer = history.lastOrNull() == Page.PLAYER
-        if (video && engine.surface == null && videoTexture?.isAvailable != true) {
-            engine.queue(uri, seekMs, gain, online, autoplay)
-        } else {
-            engine.play(uri, video, seekMs, gain, online, autoplay)
-        }
+        // Always start now — never queue forever waiting for a TextureView. A null surface
+        // still plays audio; video frames bind later when the player page attaches.
+        engine.play(uri, video, seekMs, gain, online, autoplay)
         if (!onPlayer) {
-            // Advancing in the background must not force a Player rebuild — that used to
-            // desync shade controls until the user re-entered the app.
             if (hasWindowFocus()) open(Page.PLAYER) else refreshChrome()
             return
         }
-        // Only rebuild when audio <-> video layout must change; otherwise keep the page (and surface).
-        val needRebuild = previous?.video != track?.video || (video && engine.surface == null && videoTexture?.isAvailable != true)
+        val layoutChanged = previousVideo != null && previousVideo != track?.video
+        val needRebuild = layoutChanged || (video && engine.surface == null && videoTexture?.isAvailable != true)
         if (needRebuild) {
             motion = 0
             show()
@@ -431,9 +430,9 @@ internal fun MainActivity.retryOnlineStream(fromMs: Int) {
     }
 
 internal fun MainActivity.togglePlay() {
-        // While the next track is loading, ignore shade/lock-screen Play so we do not
-        // restart the track that just ended.
-        if (trackSwitching || streamBusy) {
+        // Only block while an online scrape is in flight. A stuck trackSwitching used to
+        // swallow shade Play forever (infinite loading) until the user opened the track.
+        if (streamBusy) {
             refreshChrome()
             return
         }
@@ -463,7 +462,11 @@ internal fun MainActivity.step(direction: Int) {
             when {
                 candidate in tracks.indices -> candidate
                 library.repeatMode == 1 -> if (direction > 0) 0 else tracks.lastIndex
-                else -> return
+                else -> {
+                    trackSwitching = false
+                    refreshChrome()
+                    return
+                }
             }
         }
         play(next, 0)
@@ -506,8 +509,10 @@ internal fun MainActivity.videoFrame(height: Int): FrameLayout {
                 }
                 override fun onSurfaceTextureSizeChanged(st: android.graphics.SurfaceTexture, w: Int, h: Int) = Unit
                 override fun onSurfaceTextureDestroyed(st: android.graphics.SurfaceTexture): Boolean {
-                    // Keep SurfaceTexture while media is active so Queue/Fullscreen do not seek backward.
-                    if (engine.ready) {
+                    // Keep SurfaceTexture while media is active OR while the next track is
+                    // starting — completion clears ready before beginPlay, and releasing here
+                    // used to leave next video queued forever (infinite loading).
+                    if (engine.ready || trackSwitching || streamBusy) {
                         savedVideoSurfaceTexture = st
                         return false
                     }

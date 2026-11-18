@@ -458,7 +458,14 @@ class MainActivity : Activity() {
 
         fun attach(next: Surface) {
             surface = next
-            if (videoMode) try { player.setSurface(next) } catch (_: IllegalStateException) {}
+            if (videoMode) {
+                try { player.setSurface(next) } catch (_: IllegalStateException) {}
+                // Next-track may have started with a null surface (audio only). Rebind is enough.
+                if (ready && queued == null) {
+                    onChange?.invoke()
+                    return
+                }
+            }
             // If media is already running, only rebind the surface — never restart from a queued seek.
             if (ready && queued == null) return
             queued?.let { (uri, seek) ->
@@ -571,7 +578,13 @@ class MainActivity : Activity() {
             if (playing()) pause() else try { player.start() } catch (_: IllegalStateException) {}
         }
         fun pause() { if (ready) try { if (player.isPlaying) player.pause() } catch (_: IllegalStateException) {} }
-        fun stop() { token += 1; ready = false; queued = null; try { player.reset() } catch (_: IllegalStateException) {} }
+        fun stop() {
+            token += 1
+            ready = false
+            trackSwitching = false
+            queued = null
+            try { player.reset() } catch (_: IllegalStateException) {}
+        }
         fun seek(ms: Int) { if (ready && ms >= 0) try { player.seekTo(ms) } catch (_: IllegalStateException) {} }
         fun position() = try { if (ready) player.currentPosition else library.positionMs } catch (_: IllegalStateException) { 0 }
         fun duration() = try { if (ready) player.duration.coerceAtLeast(0) else 0 } catch (_: IllegalStateException) { 0 }
