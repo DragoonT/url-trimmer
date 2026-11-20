@@ -116,21 +116,23 @@ internal fun MainActivity.playerPage(): View {
         times.addView(playerTotal)
         root.addView(times)
         val controls = row().apply { gravity = Gravity.CENTER; setPadding(0, px(8), 0, 0) }
-        controls.addView(iconButton(if (library.shuffle) "shuffle" else "shuffle", false, library.shuffle) {
+        playerShuffle = iconButton("shuffle", false, library.shuffle) {
             library.shuffle = !library.shuffle
             library.save()
             // Avoid full Player rebuild (surface tear-down) for a toggle.
             refreshChrome()
-        })
+        }
+        controls.addView(playerShuffle)
         controls.addView(iconButton("prev", false, false) { step(-1) })
         playerPlay = iconButton(if (engine.playing()) "pause" else "play", true, false) { togglePlay() }
         controls.addView(playerPlay)
         controls.addView(iconButton("next", false, false) { step(1) })
-        controls.addView(iconButton(if (library.repeatMode == 2) "repeat1" else "repeat", false, library.repeatMode != 0) {
+        playerRepeat = iconButton(if (library.repeatMode == 2) "repeat1" else "repeat", false, library.repeatMode != 0) {
             library.repeatMode = (library.repeatMode + 1) % 3
             library.save()
             refreshChrome()
-        })
+        }
+        controls.addView(playerRepeat)
         root.addView(controls)
         root.addView(View(this), LinearLayout.LayoutParams(1, 0, 1f))
         root.addView(TextView(this).apply {
@@ -251,6 +253,15 @@ internal fun MainActivity.refreshClock() {
         playerPlay?.invalidate()
         miniPlay?.kind = if (playing) "pause" else "play"
         miniPlay?.invalidate()
+        playerShuffle?.let {
+            it.lit = library.shuffle
+            it.invalidate()
+        }
+        playerRepeat?.let {
+            it.kind = if (library.repeatMode == 2) "repeat1" else "repeat"
+            it.lit = library.repeatMode != 0
+            it.invalidate()
+        }
         val track = library.current().tracks.getOrNull(library.currentTrack)
         if (track != null) playerArtist?.text = trackLine(track)
         // Keep playhead in memory while ready (playing or paused) so close/reopen can restore it.

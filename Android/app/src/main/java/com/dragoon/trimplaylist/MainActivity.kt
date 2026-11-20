@@ -123,6 +123,8 @@ class MainActivity : Activity() {
     internal var playerTime: TextView? = null
     internal var playerTotal: TextView? = null
     internal var playerPlay: Glyph? = null
+    internal var playerShuffle: Glyph? = null
+    internal var playerRepeat: Glyph? = null
     internal var playerTitle: TextView? = null
     internal var playerArtist: TextView? = null
     internal var videoHost: FrameLayout? = null
