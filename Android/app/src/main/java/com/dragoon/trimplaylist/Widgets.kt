@@ -383,7 +383,7 @@ internal fun MainActivity.replaceOnlineWithLocal(local: Track) {
             }
         }
         // Switch to the saved file only if that Online row was playing — keep autoplay state.
-        if (resumeIndex >= 0) play(resumeIndex, resumeMs, autoplay = wasPlaying || !engine.ready)
+        if (resumeIndex >= 0) play(resumeIndex, resumeMs, autoplay = wasPlaying)
     }
 
 internal fun MainActivity.displayName(uri: Uri): String {

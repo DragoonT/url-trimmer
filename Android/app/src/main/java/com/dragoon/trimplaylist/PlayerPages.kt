@@ -288,6 +288,8 @@ internal fun MainActivity.restorePlaybackSession() {
         val index = library.currentTrack
         if (index !in library.current().tracks.indices) return
         val seek = library.positionMs.coerceAtLeast(0)
+        // Always reopen paused — never Reels-style autoplay just because the app became visible.
+        engine.wantPlay = false
         play(index, seek, autoplay = false)
     }
 
@@ -453,7 +455,7 @@ internal fun MainActivity.togglePlay() {
             return
         }
         val index = if (library.currentTrack >= 0) library.currentTrack else 0
-        if (library.current().tracks.isEmpty()) toast("Add a song first") else play(index, library.positionMs)
+        if (library.current().tracks.isEmpty()) toast("Add a song first") else play(index, library.positionMs, autoplay = true)
     }
 
 internal fun MainActivity.step(direction: Int) {

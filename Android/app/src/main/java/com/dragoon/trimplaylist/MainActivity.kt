@@ -443,16 +443,29 @@ class MainActivity : Activity() {
         private var streamRetries = 0
         private var onlineUri = false
         var onChange: (() -> Unit)? = null
+        /** False after the user pauses/stops — blocks Reels-style auto-resume on app re-entry / focus gain. */
+        var wantPlay = false
         private val focusRequest = AudioFocusRequest.Builder(AudioManager.AUDIOFOCUS_GAIN)
             .setAudioAttributes(audioAttributes())
             .setOnAudioFocusChangeListener { change ->
                 when (change) {
-                    AudioManager.AUDIOFOCUS_LOSS -> { pause(); onChange?.invoke() }
+                    AudioManager.AUDIOFOCUS_LOSS -> {
+                        pauseInternal()
+                        onChange?.invoke()
+                    }
                     AudioManager.AUDIOFOCUS_LOSS_TRANSIENT, AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK -> {
-                        pause(); onChange?.invoke()
+                        pauseInternal()
+                        onChange?.invoke()
                     }
                     AudioManager.AUDIOFOCUS_GAIN -> {
-                        if (ready && !playing()) try { player.start(); onChange?.invoke() } catch (_: IllegalStateException) {}
+                        // Only resume after a system interruption, never after an explicit user pause.
+                        if (wantPlay && ready && !playing()) {
+                            try {
+                                player.start()
+                                onChange?.invoke()
+                            } catch (_: IllegalStateException) {
+                            }
+                        }
                     }
                 }
             }
@@ -495,6 +508,7 @@ class MainActivity : Activity() {
             trackGain = gain.coerceIn(0.5f, 5f)
             val current = ++token
             ready = false
+            wantPlay = autoplay
             videoMode = video
             queued = null
             streamRetries = 0
@@ -505,7 +519,10 @@ class MainActivity : Activity() {
                 streamPageUri = ""
                 streamHeaders = emptyMap()
             }
-            getSystemService(AudioManager::class.java).requestAudioFocus(focusRequest)
+            // Paused restore must not take audio focus — that used to auto-start on re-entry.
+            if (autoplay) {
+                getSystemService(AudioManager::class.java).requestAudioFocus(focusRequest)
+            }
             try {
                 player.reset()
                 player.setWakeMode(this@MainActivity, android.os.PowerManager.PARTIAL_WAKE_LOCK)
@@ -528,7 +545,7 @@ class MainActivity : Activity() {
                     if (videoMode) try { player.setSurface(surface) } catch (_: IllegalStateException) {}
                     applyVolume()
                     if (seekMs > 0) it.seekTo(seekMs)
-                    if (autoplay) it.start()
+                    if (autoplay && wantPlay) it.start()
                     onChange?.invoke()
                 }
                 player.setOnCompletionListener {
@@ -577,14 +594,40 @@ class MainActivity : Activity() {
 
         fun toggle() {
             if (!ready) return
-            if (playing()) pause() else try { player.start() } catch (_: IllegalStateException) {}
+            if (playing()) pause(fromUser = true) else resumeFromUser()
         }
-        fun pause() { if (ready) try { if (player.isPlaying) player.pause() } catch (_: IllegalStateException) {} }
+
+        fun resumeFromUser() {
+            wantPlay = true
+            getSystemService(AudioManager::class.java).requestAudioFocus(focusRequest)
+            if (ready) try { player.start() } catch (_: IllegalStateException) {}
+        }
+
+        fun pause(fromUser: Boolean = false) {
+            if (fromUser) {
+                wantPlay = false
+                try {
+                    getSystemService(AudioManager::class.java).abandonAudioFocusRequest(focusRequest)
+                } catch (_: Exception) {
+                }
+            }
+            pauseInternal()
+        }
+
+        private fun pauseInternal() {
+            if (ready) try { if (player.isPlaying) player.pause() } catch (_: IllegalStateException) {}
+        }
+
         fun stop() {
             token += 1
             ready = false
+            wantPlay = false
             trackSwitching = false
             queued = null
+            try {
+                getSystemService(AudioManager::class.java).abandonAudioFocusRequest(focusRequest)
+            } catch (_: Exception) {
+            }
             try { player.reset() } catch (_: IllegalStateException) {}
         }
         fun seek(ms: Int) { if (ready && ms >= 0) try { player.seekTo(ms) } catch (_: IllegalStateException) {} }
