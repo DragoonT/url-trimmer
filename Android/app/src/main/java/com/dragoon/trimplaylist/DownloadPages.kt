@@ -465,10 +465,12 @@ internal fun MainActivity.beginDownload(pages: List<String>, trimming: Boolean, 
         val maxHeight = heights.getOrElse(downloadQuality) { 0 }
         val cookieHost = if (pages.firstOrNull()?.contains("youtu") == true) "www.youtube.com" else (Uri.parse(pages.firstOrNull().orEmpty()).host ?: "youtube.com")
         val cookie = authCookieHeader(cookieHost)
+        val cookiesFile = authCookiesFile(pages.firstOrNull().orEmpty())
         reportDownload("Starting · 0%", 0f)
         Thread {
             try {
-                val items = pages.flatMap { PhoneDownload.items(it, audio, maxHeight, cookie) }
+                PhoneDownload.initEngine(applicationContext)
+                val items = pages.flatMap { PhoneDownload.items(it, audio, maxHeight, cookie, cookiesFile) }
                 val folder = stagingDownloadDir()
                 val saved = mutableListOf<Pair<Track, String>>()
                 items.forEachIndexed { index, item ->
@@ -572,5 +574,42 @@ internal fun MainActivity.authCookieHeader(host: String): String? {
             "${parts[5]}=${parts[6]}"
         }
         return pairs.joinToString("; ").ifBlank { null }
+    }
+
+/** Netscape cookies.txt for yt-dlp, or a temp file built from the in-app sign-in. */
+internal fun MainActivity.authCookiesFile(pageUrl: String): File? {
+        if (downloadAuth == 2) return null
+        if (downloadAuth == 0) {
+            if (cookieName.isBlank()) return null
+            return File(cookiesDir(), cookieName).takeIf { it.exists() && it.length() > 0 }
+        }
+        val host = Uri.parse(pageUrl).host ?: return null
+        val domains = linkedSetOf(
+            host,
+            host.removePrefix("www.").removePrefix("m.").removePrefix("mobile."),
+            "facebook.com",
+            "instagram.com",
+            "youtube.com",
+            "tiktok.com",
+            "x.com",
+            "twitter.com",
+            "twitch.tv",
+        )
+        val manager = CookieManager.getInstance()
+        val lines = ArrayList<String>()
+        lines += "# Netscape HTTP Cookie File"
+        domains.forEach { domain ->
+            val raw = manager.getCookie("https://$domain") ?: manager.getCookie("https://www.$domain") ?: return@forEach
+            raw.split(';').map { it.trim() }.filter { it.contains('=') }.forEach { pair ->
+                val name = pair.substringBefore('=').trim()
+                val value = pair.substringAfter('=').trim()
+                if (name.isBlank()) return@forEach
+                lines += "$domain\tTRUE\t/\tFALSE\t0\t$name\t$value"
+            }
+        }
+        if (lines.size <= 1) return null
+        val temp = File(cacheDir, "ytdlp-cookies.txt")
+        temp.writeText(lines.joinToString("\n") + "\n")
+        return temp
     }
 

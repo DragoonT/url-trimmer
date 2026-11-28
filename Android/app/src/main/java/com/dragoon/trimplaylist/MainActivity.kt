@@ -177,6 +177,7 @@ class MainActivity : Activity() {
         draftVolume = prefs.getString("trim-volume", "1") ?: "1"
         engine = Engine()
         engine.onChange = { refreshChrome() }
+        PhoneDownload.initEngine(applicationContext)
         session = MediaSession(this, "TrimPlaylist")
         session.setCallback(object : MediaSession.Callback() {
             override fun onPlay() { runOnUiThread { if (!engine.playing()) togglePlay() } }

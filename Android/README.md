@@ -1,13 +1,13 @@
 # Trim Playlist for Android
 
-This is the Trim Playlist app for Android, version 0.1.18. Playlists, downloads, trim, and cookie files stay on the phone. The app does not embed Python, yt-dlp, or FFmpeg.
+This is the Trim Playlist app for Android, version 0.1.19. Playlists, downloads, trim, and cookie files stay on the phone. Downloads use yt-dlp (via youtubedl-android) so Facebook, Instagram, TikTok, and other sites work like the Windows app — not only YouTube.
 
 ## What you can do
 
 - Create, rename, and delete playlists.
 - Choose one or more audio or video files. Trim Playlist remembers the files you picked.
 - Paste a direct `http` or `https` link to an audio or video file, and mark it as audio or video.
-- Download a video or playlist. Full download saves the whole file. Trim saves a file cut from Start to End. A download is not added to a playlist on its own.
+- Download from YouTube or other sites yt-dlp supports (Facebook, Instagram, TikTok, and more). Full download saves the whole file. Trim saves a file cut from Start to End. A download is not added to a playlist on its own. Sign-in cookies help with private posts.
 - Add a cookie file with **Create new**. **Manual .txt** asks for a name and then you type the cookies. **Import .txt file** uses a `.txt` you already have. Platform account signs in inside the app.
 - Tap a track to play it. Pause, seek, skip, shuffle, repeat one track, or repeat the playlist.
 - Move tracks up or down, or remove them from the playlist.

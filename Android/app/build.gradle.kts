@@ -11,8 +11,12 @@ android {
         applicationId = "com.dragoon.trimplaylist"
         minSdk = 26
         targetSdk = 35
-        versionCode = 19
-        versionName = "0.1.18"
+        versionCode = 20
+        versionName = "0.1.19"
+        ndk {
+            // Phone ABIs only — keeps the APK under GitHub's upload limits.
+            abiFilters += listOf("armeabi-v7a", "arm64-v8a")
+        }
     }
 
     compileOptions {
@@ -27,4 +31,16 @@ android {
     buildFeatures {
         buildConfig = true
     }
+
+    packaging {
+        jniLibs {
+            useLegacyPackaging = true
+        }
+    }
+}
+
+dependencies {
+    val ytdlpAndroid = "0.18.1"
+    implementation("io.github.junkfood02.youtubedl-android:library:$ytdlpAndroid")
+    implementation("io.github.junkfood02.youtubedl-android:ffmpeg:$ytdlpAndroid")
 }

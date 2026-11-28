@@ -1,9 +1,14 @@
 package com.dragoon.trimplaylist
 
+import android.content.Context
 import android.media.MediaCodec
 import android.media.MediaExtractor
 import android.media.MediaFormat
 import android.media.MediaMuxer
+import android.util.Log
+import com.yausername.ffmpeg.FFmpeg
+import com.yausername.youtubedl_android.YoutubeDL
+import com.yausername.youtubedl_android.YoutubeDLRequest
 import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
@@ -11,10 +16,14 @@ import java.io.FileOutputStream
 import java.net.HttpURLConnection
 import java.net.URL
 import java.nio.ByteBuffer
+import java.util.concurrent.atomic.AtomicBoolean
 
-/** Saves a direct file or a YouTube video onto this phone and reports 0–1 progress. */
+/** Saves YouTube (InnerTube), direct media files, or any yt-dlp site onto this phone. */
 object PhoneDownload {
     private const val CHROME = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36"
+    private const val TAG = "PhoneDownload"
+    private val engineReady = AtomicBoolean(false)
+
     data class Item(
         val title: String,
         val url: String,
@@ -25,16 +34,102 @@ object PhoneDownload {
         val artist: String = "",
         val durationMs: Int = 0,
         val thumbUrl: String = "",
+        /** When true, [url] is a page URL and [save] runs yt-dlp instead of a raw HTTP fetch. */
+        val ytdlp: Boolean = false,
+        val maxHeight: Int = 0,
+        val cookiesFile: String? = null,
+        val cookieHeader: String? = null,
     )
 
-    fun items(pageUrl: String, audio: Boolean, maxHeight: Int, cookie: String?): List<Item> {
+    fun initEngine(context: Context) {
+        if (engineReady.get()) return
+        synchronized(this) {
+            if (engineReady.get()) return
+            try {
+                YoutubeDL.getInstance().init(context)
+                FFmpeg.getInstance().init(context)
+                engineReady.set(true)
+            } catch (error: Exception) {
+                Log.e(TAG, "yt-dlp init failed", error)
+            }
+        }
+    }
+
+    fun items(
+        pageUrl: String,
+        audio: Boolean,
+        maxHeight: Int,
+        cookie: String?,
+        cookiesFile: File? = null,
+    ): List<Item> {
         val list = Regex("[?&]list=([A-Za-z0-9_-]+)").find(pageUrl)?.groupValues?.get(1)
         val ids = when {
             list != null && (pageUrl.contains("youtube.com") || pageUrl.contains("youtu.be")) -> playlistIds(list, cookie)
             pageUrl.contains("youtube.com") || pageUrl.contains("youtu.be") -> listOf(videoId(pageUrl) ?: error("That YouTube link has no video"))
-            else -> return listOf(directItem(pageUrl, cookie))
+            else -> return listOf(genericItem(pageUrl, audio, maxHeight, cookie, cookiesFile))
         }
         return ids.map { stream(it, audio, maxHeight, cookie) }
+    }
+
+    private fun genericItem(
+        pageUrl: String,
+        audio: Boolean,
+        maxHeight: Int,
+        cookie: String?,
+        cookiesFile: File?,
+    ): Item {
+        runCatching { return directItem(pageUrl, cookie) }
+        return ytdlpItem(pageUrl, audio, maxHeight, cookie, cookiesFile)
+    }
+
+    private fun ytdlpItem(
+        pageUrl: String,
+        audio: Boolean,
+        maxHeight: Int,
+        cookie: String?,
+        cookiesFile: File?,
+    ): Item {
+        ensureEngine()
+        val request = YoutubeDLRequest(pageUrl)
+        applyAuth(request, cookie, cookiesFile)
+        request.addOption("--no-playlist")
+        val info = try {
+            YoutubeDL.getInstance().getInfo(request)
+        } catch (error: Exception) {
+            error(error.message?.takeIf { it.isNotBlank() } ?: "Couldn't read that page with yt-dlp")
+        }
+        val title = info.title?.takeIf { it.isNotBlank() }
+            ?: pageUrl.substringBefore('?').substringAfterLast('/').ifBlank { "Download" }
+        val artist = info.uploader?.takeIf { it.isNotBlank() }.orEmpty()
+        val durationMs = info.duration.coerceAtLeast(0) * 1000
+        val thumb = info.thumbnail?.takeIf { it.isNotBlank() }.orEmpty()
+        return Item(
+            title = title,
+            url = pageUrl,
+            ext = if (audio) "m4a" else "mp4",
+            video = !audio,
+            artist = artist,
+            durationMs = durationMs,
+            thumbUrl = thumb,
+            ytdlp = true,
+            maxHeight = maxHeight,
+            cookiesFile = cookiesFile?.absolutePath,
+            cookieHeader = cookie,
+        )
+    }
+
+    private fun ensureEngine() {
+        if (!engineReady.get()) error("Download engine is not ready. Restart the app and try again.")
+    }
+
+    private fun applyAuth(request: YoutubeDLRequest, cookie: String?, cookiesFile: File?) {
+        val file = cookiesFile?.takeIf { it.exists() && it.length() > 0 }
+        if (file != null) {
+            request.addOption("--cookies", file.absolutePath)
+        } else if (!cookie.isNullOrBlank()) {
+            request.addOption("--add-header", "Cookie:$cookie")
+        }
+        request.addOption("--add-header", "User-Agent:$CHROME")
     }
 
     fun catalog(pageUrl: String, cookie: String?): List<Pair<String, String>> {
@@ -286,6 +381,7 @@ object PhoneDownload {
 
     fun save(dir: File, item: Item, cookie: String?, onProgress: (Float) -> Unit): File {
         dir.mkdirs()
+        if (item.ytdlp) return ytdlpSave(dir, item, onProgress)
         try {
             return saveParts(dir, item, cookie, onProgress)
         } catch (error: Exception) {
@@ -293,6 +389,57 @@ object PhoneDownload {
             if (fallback.isNullOrBlank() || error.message?.contains("403") != true) throw error
             return fetch(dir, item.title, "mp4", fallback, null, onProgress)
         }
+    }
+
+    private fun ytdlpSave(dir: File, item: Item, onProgress: (Float) -> Unit): File {
+        ensureEngine()
+        val token = "trim_${System.currentTimeMillis()}"
+        val template = File(dir, "$token.%(ext)s").absolutePath
+        val request = YoutubeDLRequest(item.url)
+        applyAuth(request, item.cookieHeader, item.cookiesFile?.let { File(it) })
+        request.addOption("--no-mtime")
+        request.addOption("--no-playlist")
+        request.addOption("-o", template)
+        if (!item.video) {
+            request.addOption("-f", "bestaudio/best")
+            request.addOption("-x")
+            request.addOption("--audio-format", "m4a")
+            request.addOption("--audio-quality", "0")
+        } else {
+            val height = item.maxHeight
+            val format = if (height > 0) {
+                "bv*[height<=$height]+ba/b[height<=$height]/bv*+ba/b"
+            } else {
+                "bv*+ba/bv+ba/b"
+            }
+            request.addOption("-f", format)
+            request.addOption("--merge-output-format", "mp4")
+            if (height > 0) request.addOption("-S", "res:$height,codec:h264,codec:vp9,codec:av01")
+        }
+        onProgress(0.02f)
+        try {
+            YoutubeDL.getInstance().execute(request, token) { progress, _, _ ->
+                val fraction = (progress / 100f).coerceIn(0f, 0.99f)
+                if (fraction > 0f) onProgress(fraction)
+            }
+        } catch (error: Exception) {
+            error(error.message?.takeIf { it.isNotBlank() } ?: "yt-dlp could not download that link")
+        }
+        val produced = dir.listFiles()
+            ?.filter { it.isFile && it.name.startsWith(token) }
+            ?.maxByOrNull { it.lastModified() }
+            ?: error("Download finished but no file was saved")
+        val ext = produced.extension.ifBlank { if (item.video) "mp4" else "m4a" }
+        val target = unique(dir, item.title, ext)
+        if (produced.absolutePath != target.absolutePath) {
+            if (target.exists()) target.delete()
+            if (!produced.renameTo(target)) {
+                produced.copyTo(target, overwrite = true)
+                produced.delete()
+            }
+        }
+        onProgress(1f)
+        return target
     }
 
     private fun saveParts(dir: File, item: Item, cookie: String?, onProgress: (Float) -> Unit): File {
